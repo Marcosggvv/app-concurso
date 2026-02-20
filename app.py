@@ -3,15 +3,14 @@ import sqlite3
 import pdfplumber
 import pandas as pd
 from datetime import datetime
-from google import genai
 import json
 import random
-import time
+from groq import Groq
 
 st.set_page_config(page_title="App Concurso Inteligente", layout="wide", initial_sidebar_state="expanded")
 
-# ================= CHAVE GEMINI COFRE SECRETO =================
-client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+# ================= CHAVE GROQ COFRE SECRETO =================
+client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 # ===========================================================
 
 # ================= BANCO DE DADOS =================
@@ -64,7 +63,7 @@ with st.sidebar:
 
     if edital:
         if st.button("Analisar Edital e Extrair Matérias", use_container_width=True):
-            with st.spinner("Mapeando conteúdo programático..."):
+            with st.spinner("Mapeando conteúdo programático na velocidade Groq..."):
                 with pdfplumber.open(edital) as pdf:
                     texto = ""
                     for pagina in pdf.pages:
@@ -88,13 +87,16 @@ with st.sidebar:
                 """
 
                 try:
-                    time.sleep(8) 
-                    resposta = client.models.generate_content(
-                        model="gemini-1.5-flash-8b",
-                        contents=prompt,
+                    resposta = client.chat.completions.create(
+                        messages=[
+                            {"role": "system", "content": "Você responde estritamente em formato JSON válido, sem nenhum texto explicativo antes ou depois."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        model="llama3-70b-8192",
+                        temperature=0.1,
                     )
                     
-                    texto_json = resposta.text.replace("```json", "").replace("```", "").strip()
+                    texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                     dados = json.loads(texto_json)
                     st.session_state.dados_edital = dados
                     st.success("Edital mapeado com sucesso!")
@@ -205,16 +207,18 @@ with aba1:
             """
 
             try:
-                time.sleep(8) 
-                resposta = client.models.generate_content(
-                    model="gemini-1.5-flash-8b",
-                    contents=prompt,
+                resposta = client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": "Você responde estritamente em formato JSON válido, em formato de array. Não adicione texto antes ou depois."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    model="llama3-70b-8192",
+                    temperature=0.3,
                 )
                 
-                texto_json = resposta.text.replace("```json", "").replace("```", "").strip()
+                texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                 lista_questoes = json.loads(texto_json)
                 
-                # Garante o funcionamento caso o modelo devolva um dicionário único em vez de lista
                 if isinstance(lista_questoes, dict):
                     lista_questoes = [lista_questoes]
                 
@@ -302,4 +306,3 @@ with aba3:
         colB.metric("Bateria de Resoluções", len(df))
     else:
         st.info("Inicie a resolução de itens para compilar os dados estatísticos.")
-
