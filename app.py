@@ -110,6 +110,7 @@ with st.sidebar:
 
 # ================= TELA PRINCIPAL (ABAS) =================
 st.title("📚 Sistema Inteligente de Estudos")
+st.markdown("##### *Criado por Marcos Versiane*")
 
 # Mostra informações do edital se já estiver carregado
 if st.session_state.dados_edital:
@@ -283,4 +284,5 @@ with aba3:
         colA.metric("Aproveitamento Total", f"{taxa}%")
         colB.metric("Bateria de Resoluções", len(df))
     else:
+
         st.info("Inicie a resolução de itens para compilar os dados estatísticos.")
