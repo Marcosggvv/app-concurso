@@ -69,10 +69,13 @@ with st.sidebar:
                     for pagina in pdf.pages:
                         if pagina.extract_text():
                             texto += pagina.extract_text() + "\n"
+                
+                # Fatiamento Inteligente: captura os últimos 35.000 caracteres (Anexos/Syllabus)
+                texto_reduzido = texto[-35000:] if len(texto) > 35000 else texto
 
                 prompt = f"""
                 Você é um especialista em análise de editais de concurso.
-                Leia o edital abaixo e extraia o Conteúdo Programático.
+                Leia o recorte do edital abaixo e extraia o Conteúdo Programático.
                 
                 Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
                 {{
@@ -83,7 +86,7 @@ with st.sidebar:
                   }}
                 }}
                 
-                Texto: {texto}
+                Texto: {texto_reduzido}
                 """
 
                 try:
