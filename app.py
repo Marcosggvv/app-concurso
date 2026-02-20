@@ -90,7 +90,7 @@ with st.sidebar:
                 try:
                     time.sleep(8) 
                     resposta = client.models.generate_content(
-                        model="gemini-2.5-flash",
+                        model="gemini-1.5-flash-8b",
                         contents=prompt,
                     )
                     
@@ -207,7 +207,7 @@ with aba1:
             try:
                 time.sleep(8) 
                 resposta = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-1.5-flash-8b",
                     contents=prompt,
                 )
                 
@@ -302,3 +302,4 @@ with aba3:
         colB.metric("Bateria de Resoluções", len(df))
     else:
         st.info("Inicie a resolução de itens para compilar os dados estatísticos.")
+
