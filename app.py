@@ -6,10 +6,11 @@ from datetime import datetime
 from google import genai
 import json
 import random
+import time
 
 st.set_page_config(page_title="App Concurso Inteligente", layout="wide", initial_sidebar_state="expanded")
 
-# ================= CHAVE GEMINI =================
+# ================= CHAVE GEMINI COFRE SECRETO =================
 client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 # ===========================================================
 
@@ -87,15 +88,16 @@ with st.sidebar:
                 """
 
                 try:
+                    time.sleep(3) # Freio automático contra erro 429
                     resposta = client.models.generate_content(
-                        model="gemini-1.5-pro",
+                        model="gemini-1.5-flash",
                         contents=prompt,
                     )
                     
                     texto_json = resposta.text.replace("```json", "").replace("```", "").strip()
                     dados = json.loads(texto_json)
                     st.session_state.dados_edital = dados
-                    st.success("Edital mapeado!")
+                    st.success("Edital mapeado com sucesso!")
                     
                 except Exception as e:
                     st.error(f"Erro ao estruturar matérias: {e}")
@@ -108,11 +110,15 @@ with st.sidebar:
         st.success("Histórico apagado com sucesso!")
         st.rerun()
 
+    st.divider()
+    st.markdown("### 👨‍💻 Desenvolvedor")
+    st.caption("Criado e projetado por **Marcos Gonçalves Versiane**.")
+    st.markdown("🌐 [Acessar marcosversiane.com](https://marcosversiane.com)")
+
 # ================= TELA PRINCIPAL (ABAS) =================
 st.title("📚 Sistema Inteligente de Estudos")
 st.markdown("##### *Criado por Marcos Versiane*")
 
-# Mostra informações do edital se já estiver carregado
 if st.session_state.dados_edital:
     st.caption(f"🎯 Banca Foco: **{st.session_state.dados_edital.get('banca', 'N/A')}**")
 
@@ -121,7 +127,7 @@ aba1, aba2, aba3 = st.tabs(["⚡ Gerar Questões", "🎯 Modo Foco (Resolver)", 
 # ================= ABA 1: GERAR QUESTÕES =================
 with aba1:
     st.header("Criar Novo Material de Estudo")
-    st.write("Abasteça o banco de dados com novas questões antes de iniciar os estudos.")
+    st.write("Abasteça o banco de dados com novas questões antes de iniciar o treinamento.")
     
     if st.session_state.dados_edital and "disciplinas" in st.session_state.dados_edital:
         disciplinas_dict = st.session_state.dados_edital["disciplinas"]
@@ -167,7 +173,6 @@ with aba1:
                 if mat_final == "Aleatório": mat_final = "Direito Constitucional"
                 if tem_final == "Aleatório": tem_final = "Direitos Fundamentais"
 
-            # Fator de entropia para evitar repetição de textos pela IA
             fator_aleatorio = random.randint(10000, 99999)
 
             prompt = f"""
@@ -192,8 +197,9 @@ with aba1:
             """
 
             try:
+                time.sleep(3) # Freio automático contra erro 429
                 resposta = client.models.generate_content(
-                    model="gemini-1.5-pro",
+                    model="gemini-1.5-flash",
                     contents=prompt,
                 )
                 
@@ -214,7 +220,6 @@ with aba1:
 with aba2:
     st.header("Modo Foco")
     
-    # Consulta alterada: Agora só busca questões que AINDA NÃO FORAM RESPONDIDAS
     if st.button("Sortear Questão Inédita no Treinamento", type="primary"):
         c.execute("""
             SELECT id, materia, tema, enunciado, gabarito, explicacao, tipo, fonte 
@@ -227,13 +232,12 @@ with aba2:
             st.session_state.questao_atual = q
             st.session_state.respondida = False
         else:
-            # Verifica se existem questões no banco
             c.execute("SELECT COUNT(*) FROM questoes")
             total_questoes = c.fetchone()[0]
             if total_questoes == 0:
-                st.warning("O banco de dados está vazio. Vá para a aba 'Gerar Questões' primeiro.")
+                st.warning("O banco de dados está vazio. Acesse a aba 'Gerar Questões' primeiro.")
             else:
-                st.success("Excelente! Todas as questões geradas no momento já foram respondidas. Gere novos itens na Aba 1 para continuar o treinamento.")
+                st.success("Todas as questões geradas no momento já foram respondidas. Gere novos itens na Aba 1 para continuar o treinamento.")
             st.session_state.questao_atual = None
 
     if st.session_state.questao_atual:
@@ -284,9 +288,4 @@ with aba3:
         colA.metric("Aproveitamento Total", f"{taxa}%")
         colB.metric("Bateria de Resoluções", len(df))
     else:
-
         st.info("Inicie a resolução de itens para compilar os dados estatísticos.")
-
-
-
-
