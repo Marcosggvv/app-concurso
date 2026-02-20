@@ -88,9 +88,9 @@ with st.sidebar:
                 """
 
                 try:
-                    time.sleep(3) # Freio automático contra erro 429
+                    time.sleep(8) 
                     resposta = client.models.generate_content(
-                        model="gemini-1.5-flash",
+                        model="gemini-2.5-flash",
                         contents=prompt,
                     )
                     
@@ -155,10 +155,14 @@ with aba1:
         with col2:
             tema_selecionado = st.text_input("Tema (ex: Inquérito Policial)", "Aleatório")
 
-    tipo = st.selectbox("Origem da Questão", ["Questões Reais de Provas Anteriores", "Inédita IA (Estilo Banca)"])
+    col_tipo, col_qtd = st.columns([2, 1])
+    with col_tipo:
+        tipo = st.selectbox("Origem da Questão", ["Questões Reais de Provas Anteriores", "Inédita IA (Estilo Banca)"])
+    with col_qtd:
+        quantidade = st.slider("Quantidade de Questões", min_value=1, max_value=10, value=5)
 
-    if st.button("Gerar Nova Questão para o Banco", type="primary"):
-        with st.spinner("Formulando conteúdo e fundamentação com alto rigor jurídico..."):
+    if st.button("Gerar Questões para o Banco", type="primary"):
+        with st.spinner(f"Formulando {quantidade} questão(ões) com fundamentação rigorosa..."):
             
             mat_final = materia_selecionada
             tem_final = tema_selecionado
@@ -177,7 +181,7 @@ with aba1:
 
             prompt = f"""
             Aja como um examinador de concursos públicos de alto nível no Brasil.
-            Gere uma questão sobre:
+            Gere exatamente {quantidade} questão(ões) distinta(s) sobre:
             Banca: {banca_edital}
             Matéria: {mat_final}
             Tema: {tem_final}
@@ -186,35 +190,44 @@ with aba1:
             
             Regras Absolutas:
             1. Fundamente a explicação ESTRITAMENTE na legislação brasileira vigente e na jurisprudência real. Jamais invente leis ou súmulas.
-            2. Se a diretriz for 'Questões Reais', busque uma questão autêntica e varie o ano/órgão, certificando-se de não repetir abordagens comuns.
-            3. Se for 'Inédita IA', crie uma abordagem jurídica complexa e totalmente nova, garantindo que o fator de exclusividade ({fator_aleatorio}) force um ângulo inédito sobre o tema.
+            2. Se a diretriz for 'Questões Reais', busque itens autênticos e varie o ano/órgão, garantindo a não repetição de abordagens.
+            3. Se for 'Inédita IA', crie abordagens jurídicas complexas e totalmente novas.
             
-            Responda EXCLUSIVAMENTE em formato JSON:
-            "enunciado": "O texto da afirmação a ser julgada",
-            "gabarito": "Certo" ou "Errado",
-            "explicacao": "Explicação completa e assertiva com o respectivo fundamento legal brasileiro vigente.",
-            "fonte": "Indique o Ano e o Órgão da prova real ou escreva 'Inédita - Criada por IA'."
+            Responda EXCLUSIVAMENTE em formato JSON, retornando UMA LISTA (array) com {quantidade} objeto(s), seguindo esta estrutura exata:
+            [
+              {{
+                "enunciado": "O texto da afirmação a ser julgada",
+                "gabarito": "Certo" ou "Errado",
+                "explicacao": "Explicação completa e assertiva com o respectivo fundamento legal brasileiro vigente.",
+                "fonte": "Indique o Ano e o Órgão da prova real ou escreva 'Inédita - Criada por IA'."
+              }}
+            ]
             """
 
             try:
-                time.sleep(3) # Freio automático contra erro 429
+                time.sleep(8) 
                 resposta = client.models.generate_content(
-                    model="gemini-1.5-flash",
+                    model="gemini-2.5-flash",
                     contents=prompt,
                 )
                 
                 texto_json = resposta.text.replace("```json", "").replace("```", "").strip()
-                dados = json.loads(texto_json)
+                lista_questoes = json.loads(texto_json)
                 
-                c.execute("""
-                INSERT INTO questoes (materia, tema, enunciado, gabarito, explicacao, tipo, fonte)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (mat_final, tem_final, dados['enunciado'], dados['gabarito'], dados['explicacao'], tipo, dados.get('fonte', 'N/A')))
+                # Garante o funcionamento caso o modelo devolva um dicionário único em vez de lista
+                if isinstance(lista_questoes, dict):
+                    lista_questoes = [lista_questoes]
+                
+                for dados in lista_questoes:
+                    c.execute("""
+                    INSERT INTO questoes (materia, tema, enunciado, gabarito, explicacao, tipo, fonte)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (mat_final, tem_final, dados['enunciado'], dados['gabarito'], dados['explicacao'], tipo, dados.get('fonte', 'N/A')))
+                
                 conn.commit()
-
-                st.success(f"Questão adicionada ao banco de dados! (Matéria: {mat_final})")
+                st.success(f"Excelente! {len(lista_questoes)} questão(ões) adicionada(s) ao banco de dados. (Matéria: {mat_final})")
             except Exception as e:
-                st.error(f"Erro ao gerar a questão: {e}")
+                st.error(f"Erro ao gerar itens: {e}")
 
 # ================= ABA 2: RESOLVER QUESTÃO =================
 with aba2:
@@ -237,7 +250,7 @@ with aba2:
             if total_questoes == 0:
                 st.warning("O banco de dados está vazio. Acesse a aba 'Gerar Questões' primeiro.")
             else:
-                st.success("Todas as questões geradas no momento já foram respondidas. Gere novos itens na Aba 1 para continuar o treinamento.")
+                st.success("Todas as questões geradas no momento já receberam respostas. Gere novos itens na Aba 1 para continuar o treinamento.")
             st.session_state.questao_atual = None
 
     if st.session_state.questao_atual:
