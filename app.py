@@ -88,7 +88,7 @@ with st.sidebar:
 
                 try:
                     resposta = client.models.generate_content(
-                        model="gemini-2.5-flash",
+                        model="gemini-1.5-flash",
                         contents=prompt,
                     )
                     
@@ -193,7 +193,7 @@ with aba1:
 
             try:
                 resposta = client.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-1.5-flash",
                     contents=prompt,
                 )
                 
@@ -286,4 +286,5 @@ with aba3:
     else:
 
         st.info("Inicie a resolução de itens para compilar os dados estatísticos.")
+
 
