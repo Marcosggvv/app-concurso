@@ -10,7 +10,7 @@ import random
 st.set_page_config(page_title="App Concurso Inteligente", layout="wide", initial_sidebar_state="expanded")
 
 # ================= CHAVE GEMINI =================
-client = genai.Client(api_key="AIzaSyAPEjf6ZcV3deHKj6APmeETyOPiMoDHfdI")
+client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
 # ===========================================================
 
 # ================= BANCO DE DADOS =================
@@ -286,3 +286,4 @@ with aba3:
     else:
 
         st.info("Inicie a resolução de itens para compilar os dados estatísticos.")
+
