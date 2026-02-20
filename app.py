@@ -92,7 +92,7 @@ with st.sidebar:
                             {"role": "system", "content": "Você responde estritamente em formato JSON válido, sem nenhum texto explicativo antes ou depois."},
                             {"role": "user", "content": prompt}
                         ],
-                        model="llama3-70b-8192",
+                        model="llama-3.3-70b-versatile",
                         temperature=0.1,
                     )
                     
@@ -212,7 +212,7 @@ with aba1:
                         {"role": "system", "content": "Você responde estritamente em formato JSON válido, em formato de array. Não adicione texto antes ou depois."},
                         {"role": "user", "content": prompt}
                     ],
-                    model="llama3-70b-8192",
+                    model="llama-3.3-70b-versatile",
                     temperature=0.3,
                 )
                 
