@@ -93,10 +93,10 @@ with st.sidebar:
                 if inicio == -1:
                     inicio = texto_upper.rfind("OBJETOS DE AVALIAÇÃO")
                 if inicio == -1:
-                    inicio = max(0, len(texto) - 40000) # Fallback seguro
+                    inicio = max(0, len(texto) - 25000) # Fallback seguro
                 
-                # Captura 38.000 caracteres a partir do início das matérias
-                texto_reduzido = texto[inicio : inicio + 38000]
+                # Captura 25.000 caracteres para respeitar o limite exato de 12k tokens da Groq
+                texto_reduzido = texto[inicio : inicio + 25000]
 
                 prompt = f"""
                 Você é um especialista em análise de editais de concurso.
@@ -132,7 +132,7 @@ with st.sidebar:
                     texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                     dados = json.loads(texto_json)
                     st.session_state.dados_edital = dados
-                    st.success("Cargos e matérias estruturados com 100% de precisão!")
+                    st.success("Cargos e matérias estruturados com precisão absoluta!")
                 except Exception as e:
                     st.error(f"Erro ao analisar o edital: {e}")
 
