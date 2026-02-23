@@ -16,15 +16,18 @@ st.markdown("""
     .metric-title { font-size: 14px; color: #6c757d; font-weight: 600; text-transform: uppercase; }
     .metric-value { font-size: 32px; font-weight: 700; color: #212529; margin-top: 5px; }
     .stRadio > div { flex-direction: row; gap: 15px; }
+    .alt-correta { padding: 10px; background-color: #d4edda; border-left: 5px solid #28a745; border-radius: 5px; margin-bottom: 5px; }
+    .alt-errada { padding: 10px; background-color: #f8d7da; border-left: 5px solid #dc3545; border-radius: 5px; margin-bottom: 5px; }
+    .alt-neutra { padding: 10px; border-left: 5px solid #e9ecef; margin-bottom: 5px; color: #495057; }
+    .alt-gabarito { padding: 10px; background-color: #cce5ff; border-left: 5px solid #004085; border-radius: 5px; margin-bottom: 5px; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
 # ================= CHAVE GROQ =================
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-# ================= AGENTE DE BUSCA DE DUPLA VERIFICAÇÃO =================
+# ================= AGENTE DE BUSCA =================
 def pesquisar_na_web(query_questao, query_edital):
-    """Realiza buscas simultâneas para garantir jurisprudência e rigor do edital."""
     try:
         ddgs = DDGS()
         res_questao = ddgs.text(query_questao, max_results=4)
@@ -160,7 +163,7 @@ with st.sidebar:
             c.execute("DELETE FROM respostas WHERE usuario = ?", (st.session_state.usuario_atual,))
             conn.commit()
             st.session_state.bateria_atual = []
-            st.success("O histórico foi apagado!")
+            st.success("O histórico de desempenho foi apagado!")
             st.rerun()
 
 # ================= TELA PRINCIPAL =================
@@ -212,7 +215,7 @@ else:
                 "📂 Revisão (Sortear banco local)"
             ])
         with c4:
-            formato_alvo = st.selectbox("Formato (Para Inéditas)", [
+            formato_alvo = st.selectbox("Formato (Apenas p/ Inéditas)", [
                 "Múltipla Escolha (A a E)", 
                 "Múltipla Escolha (A a D)", 
                 "Certo / Errado"
@@ -225,7 +228,7 @@ else:
             instrucao_tema = f"Sorteie um tema de alta complexidade em {mat_final}" if tema_selecionado.lower() == "aleatório" else tema_selecionado
 
             if "Revisão" in tipo:
-                st.info("A resgatar histórico do seu banco local...")
+                st.info("A resgatar histórico do banco local...")
                 c.execute("""
                     SELECT id FROM questoes 
                     WHERE (banca LIKE ? OR cargo LIKE ? OR materia LIKE ?)
@@ -240,14 +243,12 @@ else:
 
             else:
                 with st.spinner(f"Executando operação tática na Web para a banca {banca_alvo} e cargo {cargo_alvo}..."):
-                    
                     query_edital = f"edital concurso {banca_alvo} {cargo_alvo} nível de dificuldade estilo de prova"
 
                     if "Inédita" in tipo:
                         query_questao = f"jurisprudencia STF STJ lei atualizada 2025 2026 {mat_final} {tema_selecionado}"
                         instrucao_ia = f"Sua missão é criar questões INÉDITAS. Utilize a dupla verificação fornecida para MIMETIZAR perfeitamente a linguagem, as pegadinhas e a profundidade da banca {banca_alvo} para o cargo de {cargo_alvo}."
                         
-                        # Regra de formato estrita apenas para inéditas
                         if formato_alvo == "Múltipla Escolha (A a E)":
                             regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
                         elif formato_alvo == "Múltipla Escolha (A a D)":
@@ -256,31 +257,32 @@ else:
                             regras_json_alt = '"alternativas": {} // DEVE SER EXATAMENTE UM DICIONÁRIO VAZIO'
                             
                         instrucao_formato = f"FORMATO IMPERATIVO: Você DEVE respeitar o formato '{formato_alvo}'. JAMAIS crie alternativas se for Certo/Errado."
+                        instrucao_fonte = 'Preencha com "Inédita IA - Estilo [Banca] - [Ano]"'
                     else:
-                        query_questao = f"questões de concurso prova {banca_alvo} {cargo_alvo} {mat_final} {tema_selecionado} nível avançado difíceis"
-                        instrucao_ia = f"Sua missão prioritária e ABSOLUTA é encontrar e TRANSCREVER DE FORMA LITERAL E FIEL questões REAIS já aplicadas pela banca {banca_alvo} para o cargo de {cargo_alvo}. É expressamente PROIBIDO adaptar, facilitar ou modificar o enunciado e as alternativas. Mantenha o nível de dificuldade jurídico extremo original."
+                        query_questao = f"questões reais de concurso {banca_alvo} {cargo_alvo} {mat_final} {tema_selecionado} nível avançado"
+                        instrucao_ia = f"Sua missão prioritária e ABSOLUTA é encontrar e TRANSCREVER DE FORMA LITERAL questões REAIS já aplicadas pela banca {banca_alvo}, preferencialmente para {cargo_alvo}. RECUPERE O NOME EXATO DO CONCURSO (ex: PCDF, TJSP, Receita Federal) e o ANO."
                         
-                        # Permite qualquer formato que venha da questão original
-                        regras_json_alt = '"alternativas": {"A": "...", "B": "..."} // Copie as alternativas EXATAMENTE como na prova original, ou deixe vazio se a original for Certo/Errado.'
-                        instrucao_formato = "FORMATO ORIGINAL: Você DEVE IGNORAR o formato exigido pelo usuário e MANTER o formato original da prova (se a prova real for A a E, use A a E; se for Certo/Errado, use Certo/Errado). A literalidade da questão real prevalece."
+                        regras_json_alt = '"alternativas": {"A": "...", "B": "..."} // Copie as alternativas EXATAMENTE como na prova original, ou vazio se for Certo/Errado.'
+                        instrucao_formato = "FORMATO ORIGINAL: Você DEVE IGNORAR o formato exigido pelo usuário e MANTER a formatação original da prova real."
+                        instrucao_fonte = 'Preencha com a identificação exata. Ex: "[Banca] - [Ano] - [Órgão exato, ex: Polícia Federal] - [Cargo]".'
 
                     contexto_da_web = pesquisar_na_web(query_questao, query_edital)
 
                     prompt = f"""
                     Atue como o examinador oficial do concurso.
                     
-                    CONTEXTO DE DUPLA VERIFICAÇÃO (WEB E MEMÓRIA):
+                    CONTEXTO DE DUPLA VERIFICAÇÃO:
                     {contexto_da_web}
                     
                     MISSÃO:
-                    Gere exatamente {qtd} questão(ões).
+                    Gere {qtd} questão(ões).
                     Cargo Alvo: {cargo_alvo} | Banca: {banca_alvo} | Matéria: {mat_final} | Tema: {instrucao_tema}
                     
-                    DIRETRIZES TÉCNICAS INEGOCIÁVEIS:
+                    DIRETRIZES TÉCNICAS:
                     1. {instrucao_ia}
                     2. {instrucao_formato}
-                    3. RIGOR JURÍDICO BRASILEIRO: O gabarito DEVE estar rigorosamente fundamentado na legislação e nas normas brasileiras vigentes. É expressamente proibido inventar jurisprudência.
-                    4. FONTE: Preencha SEMPRE com "[Banca] - [Ano] - [Órgão/Cargo]".
+                    3. RIGOR JURÍDICO: O gabarito DEVE estar fundamentado na legislação e nas normas brasileiras vigentes. Jamais invente jurisprudência.
+                    4. FONTE OBRIGATÓRIA: {instrucao_fonte}
                     
                     Responda em JSON, EXATAMENTE assim:
                     {{
@@ -290,7 +292,7 @@ else:
                           {regras_json_alt},
                           "gabarito": "Letra correta ou Certo/Errado",
                           "explicacao": "Fundamentação legal clara e responsável.",
-                          "fonte": "[Banca] - [Ano] - [Cargo/Órgão]"
+                          "fonte": "Origem exata solicitada"
                         }}
                       ]
                     }}
@@ -316,8 +318,6 @@ else:
                             fonte = dados.get("fonte", f"{banca_alvo} - {cargo_alvo}")
                             alts_dict = dados.get("alternativas", {})
                             
-                            # BLINDAGEM PYTHON: Aplica a forçação de formato APENAS para questões INÉDITAS.
-                            # Para questões REAIS, mantemos rigorosamente as alternativas originais extraídas.
                             if "Inédita" in tipo:
                                 if "Certo" in formato_alvo:
                                     alts_dict = {} 
@@ -355,18 +355,36 @@ else:
                 alts = json.loads(q_alt) if q_alt else {}
                 
                 with st.container(border=True):
-                    st.caption(f"**Item {i+1}** | {q_mat} | 🏢 {q_banca} | 💼 {q_cargo} | 🏷️ **Fonte:** {q_fonte}")
+                    st.caption(f"**Item {i+1}** | 📚 {q_mat} | 🏷️ **Fonte Original:** {q_fonte}")
                     st.markdown(f"#### {q_enun}")
                     
                     opcoes = ["Selecionar..."] + ([f"{letra}) {texto}" for letra, texto in alts.items()] if alts else ["Certo", "Errado"])
 
                     if q_id in respondidas:
                         status = respondidas[q_id]
-                        if status['acertou'] == 1: st.success(f"✅ Marcado: **{status['resposta_usuario']}** (Correto)")
-                        else: st.error(f"❌ Marcado: **{status['resposta_usuario']}** (Incorreto)")
+                        
+                        st.markdown("<br><b>Análise das Alternativas:</b>", unsafe_allow_html=True)
+                        for opcao in opcoes[1:]:
+                            letra_opcao = opcao.split(")")[0].strip().upper() if alts else opcao.strip().upper()
+                            gab_oficial = str(q_gab).strip().upper()
                             
-                        st.info(f"**Gabarito Oficial:** {q_gab}")
-                        with st.expander("📖 Fundamentação Legal"): st.write(q_exp)
+                            # Verifica se é a resposta do usuário
+                            is_resposta_usuario = (status['resposta_usuario'] == letra_opcao)
+                            is_gabarito = (letra_opcao in gab_oficial or gab_oficial in letra_opcao)
+                            
+                            if is_resposta_usuario:
+                                if status['acertou'] == 1:
+                                    st.markdown(f"<div class='alt-correta'>✅ <b>{opcao}</b> (Resposta Correta)</div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"<div class='alt-errada'>❌ <b>{opcao}</b> (Sua Resposta)</div>", unsafe_allow_html=True)
+                            elif is_gabarito and status['acertou'] == 0:
+                                st.markdown(f"<div class='alt-gabarito'>🎯 <b>{opcao}</b> (Gabarito Oficial)</div>", unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"<div class='alt-neutra'>{opcao}</div>", unsafe_allow_html=True)
+
+                        st.write("<br>", unsafe_allow_html=True)
+                        with st.expander("📖 Fundamentação Legal e Correção"): 
+                            st.write(q_exp)
                     else:
                         st.write("")
                         resp = st.radio("Sua Resposta:", opcoes, key=f"rad_{q_id}", label_visibility="collapsed")
