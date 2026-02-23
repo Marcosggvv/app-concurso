@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import json
 import random
-from groq import Groq
+from openai import OpenAI
 from duckduckgo_search import DDGS
 
 # ================= CONFIGURAÇÃO VISUAL =================
@@ -23,16 +23,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ================= CHAVE GROQ =================
-client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+# ================= CHAVE DEEPSEEK =================
+client = OpenAI(api_key=st.secrets["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com")
 
 # ================= AGENTE DE BUSCA SNIPER =================
 def pesquisar_na_web(query, focar_em_bancos_de_questoes=False):
-    """Realiza busca na web. Se focar_em_bancos for True, restringe a sites de concursos para evitar alucinação."""
     try:
         ddgs = DDGS()
         if focar_em_bancos_de_questoes:
-            # Operadores avançados para forçar a leitura apenas de bancos de questões reais
             query_otimizada = f'{query} (site:qconcursos.com OR site:tecconcursos.com.br OR site:grancursosonline.com.br)'
             resultados = ddgs.text(query_otimizada, max_results=12)
         else:
@@ -135,7 +133,7 @@ with st.sidebar:
             texto_colado = st.text_area("Cole o texto do Conteúdo Programático aqui:")
 
             if st.button("Salvar Edital no Perfil", use_container_width=True) and nome_novo and texto_colado:
-                with st.spinner("Estruturando matérias com precisão..."):
+                with st.spinner("Estruturando matérias com precisão DeepSeek..."):
                     prompt = f"""
                     Leia o texto colado abaixo e liste APENAS os nomes das grandes áreas ou disciplinas.
                     Responda EXCLUSIVAMENTE em formato JSON:
@@ -145,7 +143,7 @@ with st.sidebar:
                     try:
                         resposta = client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
-                            model="llama-3.3-70b-versatile",
+                            model="deepseek-chat",
                             temperature=0.1,
                             response_format={"type": "json_object"}
                         )
@@ -244,7 +242,7 @@ else:
                     st.warning("Banco local insuficiente. Gere material Inédito ou Real primeiro!")
 
             else:
-                with st.spinner(f"Acionando Protocolo de Auditoria para {cargo_alvo} ({banca_alvo})..."):
+                with st.spinner(f"Acionando Motor DeepSeek e Protocolo de Auditoria para {cargo_alvo} ({banca_alvo})..."):
                     
                     if "Inédita" in tipo:
                         query_questao = f"jurisprudencia STF STJ lei atualizada 2025 2026 {mat_final} {tema_selecionado}"
@@ -263,14 +261,13 @@ else:
                         instrucao_fonte = 'Preencha SEMPRE com "Inédita IA - Estilo [Banca] - [Ano]"'
                     
                     else:
-                        # Busca Sniper: Força a IA a ler apenas sites de questões de concurso (QConcursos, etc)
                         query_questao = f'"{banca_alvo}" "{cargo_alvo}" "{mat_final}" "{tema_selecionado}"'
                         contexto_da_web = pesquisar_na_web(query_questao, focar_em_bancos_de_questoes=True)
                         
                         instrucao_ia = f"""
                         ATUAÇÃO: AUDITOR DE PROVAS.
                         Sua única função é EXTRAIR questões reais do contexto web fornecido ou da sua memória consolidada.
-                        REGRA DE OURO (SOB PENA DE FALHA CRÍTICA): É TERMINANTEMENTE PROIBIDO inventar um ano, um órgão ou um concurso falso.
+                        REGRA DE OURO: É TERMINANTEMENTE PROIBIDO inventar um ano, um órgão ou um concurso falso.
                         """
                         regras_json_alt = '"alternativas": {"A": "...", "B": "..."} // Copie as alternativas EXATAMENTE como na prova original, ou deixe vazio se for Certo/Errado.'
                         instrucao_formato = "FORMATO ORIGINAL: MANTENHA a formatação original da prova real, ignorando a preferência do usuário."
@@ -278,7 +275,7 @@ else:
                         MANDATÓRIO PARA A FONTE: 
                         1. Se você tem 100% de certeza do concurso, escreva "[Banca] - [Ano] - [Órgão] - [Cargo]".
                         2. Se você sabe que a questão é real, mas não tem certeza do ano ou órgão, escreva "Banco Histórico [Banca] - Ano/Órgão Desconhecido".
-                        3. Se você NÃO achou uma prova real para este tema/cargo e foi forçado a CRIAR uma para preencher o JSON, você DEVE assumir e escrever na fonte: "Questão Inédita (Mimetizada) - Origem Real Não Localizada". JAMAIS INVENTE UM CABEÇALHO.
+                        3. Se você NÃO achou uma prova real para este tema/cargo, você DEVE assumir e escrever na fonte: "Questão Inédita (Mimetizada) - Origem Real Não Localizada". JAMAIS INVENTE UM CABEÇALHO.
                         """
 
                     prompt = f"""
@@ -314,8 +311,8 @@ else:
                     try:
                         resposta = client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
-                            model="llama-3.3-70b-versatile",
-                            temperature=0.0, # Bloqueio total de criatividade para dados reais
+                            model="deepseek-chat",
+                            temperature=0.0,
                             response_format={"type": "json_object"}
                         )
                         
@@ -368,7 +365,6 @@ else:
                 alts = json.loads(q_alt) if q_alt else {}
                 
                 with st.container(border=True):
-                    # Alerta visual se a IA confessar que não encontrou a prova original
                     if "Inédita (Mimetizada)" in q_fonte:
                         st.error(f"⚠️ **Atenção:** A inteligência artificial não localizou uma prova original com os critérios exatos exigidos na rede. A questão abaixo foi forjada no estilo da banca para evitar que o simulado ficasse vazio.")
                     
