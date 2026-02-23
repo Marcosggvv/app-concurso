@@ -26,22 +26,22 @@ st.markdown("""
 # ================= CHAVE GROQ =================
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-# ================= AGENTE DE BUSCA AMPLIADO =================
-def pesquisar_na_web(query_questao, query_edital):
-    """Busca estendida para garantir a captura completa de metadados das provas."""
+# ================= AGENTE DE BUSCA SNIPER =================
+def pesquisar_na_web(query, focar_em_bancos_de_questoes=False):
+    """Realiza busca na web. Se focar_em_bancos for True, restringe a sites de concursos para evitar alucinação."""
     try:
         ddgs = DDGS()
-        # Rede de arrasto ampliada de 4 para 12 resultados
-        res_questao = ddgs.text(query_questao, max_results=12)
-        res_edital = ddgs.text(query_edital, max_results=3)
-        
-        contexto = "--- FRAGMENTOS DA WEB: QUESTÕES E METADADOS DA PROVA ---\n"
-        contexto += "\n".join([f"- {r['body']}" for r in res_questao])
-        contexto += "\n\n--- PARÂMETROS DO CARGO E BANCA ---\n"
-        contexto += "\n".join([f"- {r['body']}" for r in res_edital])
-        return contexto
+        if focar_em_bancos_de_questoes:
+            # Operadores avançados para forçar a leitura apenas de bancos de questões reais
+            query_otimizada = f'{query} (site:qconcursos.com OR site:tecconcursos.com.br OR site:grancursosonline.com.br)'
+            resultados = ddgs.text(query_otimizada, max_results=12)
+        else:
+            resultados = ddgs.text(query, max_results=8)
+            
+        contexto = "\n".join([f"- {r['body']}" for r in resultados])
+        return contexto if contexto else "Nenhum dado real encontrado na web para estes parâmetros."
     except Exception as e:
-        return "Alerta: Busca web indisponível. Confie estritamente na base de treinamento."
+        return "Alerta: Busca web indisponível. Utilize apenas a memória consolidada."
 
 # ================= BANCO DE DADOS =================
 @st.cache_resource
@@ -213,7 +213,7 @@ else:
         with c3: 
             tipo = st.selectbox("Origem do Material", [
                 "🧠 Inédita IA (Pesquisa Jurídica Atualizada)", 
-                "🌐 Questões Reais (Busca Estendida na Web)",
+                "🌐 Questões Reais (Auditoria e Transcrição Fiel)",
                 "📂 Revisão (Sortear banco local)"
             ])
         with c4:
@@ -244,12 +244,13 @@ else:
                     st.warning("Banco local insuficiente. Gere material Inédito ou Real primeiro!")
 
             else:
-                with st.spinner(f"Executando varredura estendida na rede para {cargo_alvo} ({banca_alvo})..."):
-                    query_edital = f'"{banca_alvo}" "{cargo_alvo}" concurso edital nível exigência'
-
+                with st.spinner(f"Acionando Protocolo de Auditoria para {cargo_alvo} ({banca_alvo})..."):
+                    
                     if "Inédita" in tipo:
                         query_questao = f"jurisprudencia STF STJ lei atualizada 2025 2026 {mat_final} {tema_selecionado}"
-                        instrucao_ia = f"Crie questões INÉDITAS mimetizando rigorosamente o nível da banca {banca_alvo} para o cargo de {cargo_alvo}."
+                        contexto_da_web = pesquisar_na_web(query_questao, focar_em_bancos_de_questoes=False)
+                        
+                        instrucao_ia = f"Crie questões INÉDITAS mimetizando o rigor da banca {banca_alvo} para o cargo de {cargo_alvo}."
                         
                         if formato_alvo == "Múltipla Escolha (A a E)":
                             regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
@@ -260,31 +261,40 @@ else:
                             
                         instrucao_formato = f"FORMATO IMPERATIVO: Respeite o formato '{formato_alvo}'."
                         instrucao_fonte = 'Preencha SEMPRE com "Inédita IA - Estilo [Banca] - [Ano]"'
+                    
                     else:
-                        # Busca muito mais específica usando aspas para forçar a correspondência exata
-                        query_questao = f'"{banca_alvo}" "{cargo_alvo}" "{mat_final}" "{tema_selecionado}" "questão" ano'
-                        instrucao_ia = f"Encontre e TRANSCREVA de forma ABSOLUTAMENTE LITERAL questões REAIS da banca {banca_alvo} EXCLUSIVAMENTE para o cargo de {cargo_alvo}."
+                        # Busca Sniper: Força a IA a ler apenas sites de questões de concurso (QConcursos, etc)
+                        query_questao = f'"{banca_alvo}" "{cargo_alvo}" "{mat_final}" "{tema_selecionado}"'
+                        contexto_da_web = pesquisar_na_web(query_questao, focar_em_bancos_de_questoes=True)
                         
-                        regras_json_alt = '"alternativas": {"A": "...", "B": "..."} // Copie as alternativas EXATAMENTE como na prova original, ou vazio se for Certo/Errado.'
-                        instrucao_formato = "FORMATO ORIGINAL: MANTENHA a formatação original da prova real."
-                        instrucao_fonte = 'MANDATÓRIO: Forneça a origem exata (Banca - Ano - Órgão - Cargo). Faça o cruzamento dos dados da web com a sua memória neural interna para resgatar a data e o órgão precisos. O campo fonte DEVE confirmar que a questão pertence ao cargo de {cargo_alvo}.'
-
-                    contexto_da_web = pesquisar_na_web(query_questao, query_edital)
+                        instrucao_ia = f"""
+                        ATUAÇÃO: AUDITOR DE PROVAS.
+                        Sua única função é EXTRAIR questões reais do contexto web fornecido ou da sua memória consolidada.
+                        REGRA DE OURO (SOB PENA DE FALHA CRÍTICA): É TERMINANTEMENTE PROIBIDO inventar um ano, um órgão ou um concurso falso.
+                        """
+                        regras_json_alt = '"alternativas": {"A": "...", "B": "..."} // Copie as alternativas EXATAMENTE como na prova original, ou deixe vazio se for Certo/Errado.'
+                        instrucao_formato = "FORMATO ORIGINAL: MANTENHA a formatação original da prova real, ignorando a preferência do usuário."
+                        instrucao_fonte = """
+                        MANDATÓRIO PARA A FONTE: 
+                        1. Se você tem 100% de certeza do concurso, escreva "[Banca] - [Ano] - [Órgão] - [Cargo]".
+                        2. Se você sabe que a questão é real, mas não tem certeza do ano ou órgão, escreva "Banco Histórico [Banca] - Ano/Órgão Desconhecido".
+                        3. Se você NÃO achou uma prova real para este tema/cargo e foi forçado a CRIAR uma para preencher o JSON, você DEVE assumir e escrever na fonte: "Questão Inédita (Mimetizada) - Origem Real Não Localizada". JAMAIS INVENTE UM CABEÇALHO.
+                        """
 
                     prompt = f"""
-                    Atue como o examinador oficial do concurso.
+                    Atue sob o Protocolo de Rigor Máximo Brasileiro.
                     
-                    DADOS COLETADOS NA REDE DE ARRASTO E MEMÓRIA:
+                    DADOS COLETADOS NA WEB (AUDITORIA):
                     {contexto_da_web}
                     
                     MISSÃO:
-                    Gere {qtd} questão(ões).
+                    Entregue {qtd} questão(ões).
                     Cargo: {cargo_alvo} | Banca: {banca_alvo} | Matéria: {mat_final} | Tema: {instrucao_tema}
                     
                     DIRETRIZES TÉCNICAS:
                     1. {instrucao_ia}
                     2. {instrucao_formato}
-                    3. RIGOR JURÍDICO: O gabarito DEVE estar fundamentado na legislação e nas normas brasileiras vigentes. Jamais invente jurisprudência.
+                    3. BASE JURÍDICA: Gabarito e explicação obrigatoriamente fundamentados na legislação/jurisprudência brasileira real.
                     4. {instrucao_fonte}
                     
                     Responda em JSON, EXATAMENTE assim:
@@ -294,8 +304,8 @@ else:
                           "enunciado": "Texto da questão",
                           {regras_json_alt},
                           "gabarito": "Letra correta ou Certo/Errado",
-                          "explicacao": "Fundamentação legal clara e precisa baseada no ordenamento brasileiro.",
-                          "fonte": "Origem validada cruzando web e memória neural"
+                          "explicacao": "Fundamentação legal baseada no ordenamento brasileiro.",
+                          "fonte": "Instrução de fonte validada"
                         }}
                       ]
                     }}
@@ -305,7 +315,7 @@ else:
                         resposta = client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
                             model="llama-3.3-70b-versatile",
-                            temperature=0.1,
+                            temperature=0.0, # Bloqueio total de criatividade para dados reais
                             response_format={"type": "json_object"}
                         )
                         
@@ -318,7 +328,7 @@ else:
                             enunciado = dados.get("enunciado", "N/A")
                             gabarito = dados.get("gabarito", "N/A")
                             explicacao = dados.get("explicacao", "N/A")
-                            fonte = dados.get("fonte", "Fonte Pendente de Validação")
+                            fonte = dados.get("fonte", "Erro de Extração")
                             alts_dict = dados.get("alternativas", {})
                             
                             if "Inédita" in tipo:
@@ -358,7 +368,11 @@ else:
                 alts = json.loads(q_alt) if q_alt else {}
                 
                 with st.container(border=True):
-                    st.caption(f"**Item {i+1}** | 📚 {q_mat} | 🏷️ **Fonte Oficial:** {q_fonte}")
+                    # Alerta visual se a IA confessar que não encontrou a prova original
+                    if "Inédita (Mimetizada)" in q_fonte:
+                        st.error(f"⚠️ **Atenção:** A inteligência artificial não localizou uma prova original com os critérios exatos exigidos na rede. A questão abaixo foi forjada no estilo da banca para evitar que o simulado ficasse vazio.")
+                    
+                    st.caption(f"**Item {i+1}** | 📚 {q_mat} | 🏷️ **Origem da Questão:** {q_fonte}")
                     st.markdown(f"#### {q_enun}")
                     
                     opcoes = ["Selecionar..."] + ([f"{letra}) {texto}" for letra, texto in alts.items()] if alts else ["Certo", "Errado"])
