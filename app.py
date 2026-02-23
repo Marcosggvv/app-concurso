@@ -26,20 +26,22 @@ st.markdown("""
 # ================= CHAVE GROQ =================
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-# ================= AGENTE DE BUSCA =================
+# ================= AGENTE DE BUSCA AMPLIADO =================
 def pesquisar_na_web(query_questao, query_edital):
+    """Busca estendida para garantir a captura completa de metadados das provas."""
     try:
         ddgs = DDGS()
-        res_questao = ddgs.text(query_questao, max_results=5)
-        res_edital = ddgs.text(query_edital, max_results=2)
+        # Rede de arrasto ampliada de 4 para 12 resultados
+        res_questao = ddgs.text(query_questao, max_results=12)
+        res_edital = ddgs.text(query_edital, max_results=3)
         
-        contexto = "--- DADOS DA QUESTÃO E FONTE REAL ---\n"
+        contexto = "--- FRAGMENTOS DA WEB: QUESTÕES E METADADOS DA PROVA ---\n"
         contexto += "\n".join([f"- {r['body']}" for r in res_questao])
-        contexto += "\n\n--- NÍVEL DE RIGOR DO EDITAL ---\n"
+        contexto += "\n\n--- PARÂMETROS DO CARGO E BANCA ---\n"
         contexto += "\n".join([f"- {r['body']}" for r in res_edital])
         return contexto
     except Exception as e:
-        return "Alerta: Busca web indisponível."
+        return "Alerta: Busca web indisponível. Confie estritamente na base de treinamento."
 
 # ================= BANCO DE DADOS =================
 @st.cache_resource
@@ -127,9 +129,9 @@ with st.sidebar:
 
         st.write("---")
         with st.expander("➕ Cadastrar Novo Edital", expanded=True if df_editais.empty else False):
-            nome_novo = st.text_input("Nome do Concurso (Ex: PCSP):")
-            banca_nova = st.text_input("Banca Examinadora (Ex: Vunesp, Cebraspe):")
-            cargo_novo = st.text_input("Cargo (Ex: Delegado, Advogado):")
+            nome_novo = st.text_input("Nome do Concurso (Ex: PCDF):")
+            banca_nova = st.text_input("Banca Examinadora (Ex: Cebraspe):")
+            cargo_novo = st.text_input("Cargo (Ex: Delegado):")
             texto_colado = st.text_area("Cole o texto do Conteúdo Programático aqui:")
 
             if st.button("Salvar Edital no Perfil", use_container_width=True) and nome_novo and texto_colado:
@@ -203,15 +205,15 @@ else:
             st.warning("Carregue um edital na barra lateral para aplicar o filtro de rigor.")
             c1, c2, c3 = st.columns(3)
             with c1: banca_alvo = st.text_input("Banca", "Cebraspe")
-            with c2: cargo_alvo = st.text_input("Cargo", "Geral")
-            with c3: mat_selecionada = st.text_input("Matéria", "Direito Constitucional")
+            with c2: cargo_alvo = st.text_input("Cargo", "Delegado")
+            with c3: mat_selecionada = st.text_input("Matéria", "Direito Penal")
             tema_selecionado = st.text_input("Tema específico", "Aleatório")
 
         c3, c4, c5 = st.columns([2, 2, 1])
         with c3: 
             tipo = st.selectbox("Origem do Material", [
-                "🧠 Inédita IA (Pesquisa Jurídica Dupla)", 
-                "🌐 Questões Reais (Transcrição Literal Fiel)",
+                "🧠 Inédita IA (Pesquisa Jurídica Atualizada)", 
+                "🌐 Questões Reais (Busca Estendida na Web)",
                 "📂 Revisão (Sortear banco local)"
             ])
         with c4:
@@ -225,7 +227,7 @@ else:
 
         if st.button("Forjar Simulado", type="primary", use_container_width=True):
             mat_final = random.choice(e['materias']) if mat_selecionada == "Aleatório" and st.session_state.edital_ativo else mat_selecionada
-            instrucao_tema = f"Sorteie um tema de alta complexidade em {mat_final}" if tema_selecionado.lower() == "aleatório" else tema_selecionado
+            instrucao_tema = f"Sorteie um tema complexo em {mat_final}" if tema_selecionado.lower() == "aleatório" else tema_selecionado
 
             if "Revisão" in tipo:
                 st.info("A resgatar histórico do banco local...")
@@ -242,12 +244,12 @@ else:
                     st.warning("Banco local insuficiente. Gere material Inédito ou Real primeiro!")
 
             else:
-                with st.spinner(f"Executando operação tática na Web para a banca {banca_alvo}..."):
-                    query_edital = f"edital concurso {banca_alvo} {cargo_alvo} nível de dificuldade estilo de prova"
+                with st.spinner(f"Executando varredura estendida na rede para {cargo_alvo} ({banca_alvo})..."):
+                    query_edital = f'"{banca_alvo}" "{cargo_alvo}" concurso edital nível exigência'
 
                     if "Inédita" in tipo:
                         query_questao = f"jurisprudencia STF STJ lei atualizada 2025 2026 {mat_final} {tema_selecionado}"
-                        instrucao_ia = f"Crie questões INÉDITAS mimetizando perfeitamente a linguagem e profundidade da banca {banca_alvo} para o cargo de {cargo_alvo}."
+                        instrucao_ia = f"Crie questões INÉDITAS mimetizando rigorosamente o nível da banca {banca_alvo} para o cargo de {cargo_alvo}."
                         
                         if formato_alvo == "Múltipla Escolha (A a E)":
                             regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
@@ -259,19 +261,20 @@ else:
                         instrucao_formato = f"FORMATO IMPERATIVO: Respeite o formato '{formato_alvo}'."
                         instrucao_fonte = 'Preencha SEMPRE com "Inédita IA - Estilo [Banca] - [Ano]"'
                     else:
-                        query_questao = f"questão real prova {banca_alvo} {cargo_alvo} {mat_final} {tema_selecionado}"
-                        instrucao_ia = f"TRANSCREVA DE FORMA LITERAL E FIEL questões REAIS já aplicadas pela banca {banca_alvo}. É PROIBIDO adaptar ou facilitar."
+                        # Busca muito mais específica usando aspas para forçar a correspondência exata
+                        query_questao = f'"{banca_alvo}" "{cargo_alvo}" "{mat_final}" "{tema_selecionado}" "questão" ano'
+                        instrucao_ia = f"Encontre e TRANSCREVA de forma ABSOLUTAMENTE LITERAL questões REAIS da banca {banca_alvo} EXCLUSIVAMENTE para o cargo de {cargo_alvo}."
                         
                         regras_json_alt = '"alternativas": {"A": "...", "B": "..."} // Copie as alternativas EXATAMENTE como na prova original, ou vazio se for Certo/Errado.'
-                        instrucao_formato = "FORMATO ORIGINAL: IGNORE o formato exigido pelo usuário e MANTENHA a formatação original da prova real."
-                        instrucao_fonte = 'PROTOCOLO ANTI-ALUCINAÇÃO: Se você tiver certeza absoluta do ano e do órgão, escreva "[Banca] - [Ano] - [Órgão]". SE VOCÊ NÃO ENCONTRAR O ANO EXATO DA PROVA NO TEXTO DE BUSCA OU NA SUA BASE, É TERMINANTEMENTE PROIBIDO INVENTAR UM ANO OU CONCURSO FALSO. Nesse caso, escreva obrigatoriamente: "Banco de dados histórico - [Banca]".'
+                        instrucao_formato = "FORMATO ORIGINAL: MANTENHA a formatação original da prova real."
+                        instrucao_fonte = 'MANDATÓRIO: Forneça a origem exata (Banca - Ano - Órgão - Cargo). Faça o cruzamento dos dados da web com a sua memória neural interna para resgatar a data e o órgão precisos. O campo fonte DEVE confirmar que a questão pertence ao cargo de {cargo_alvo}.'
 
                     contexto_da_web = pesquisar_na_web(query_questao, query_edital)
 
                     prompt = f"""
                     Atue como o examinador oficial do concurso.
                     
-                    CONTEXTO DE BUSCA E MEMÓRIA:
+                    DADOS COLETADOS NA REDE DE ARRASTO E MEMÓRIA:
                     {contexto_da_web}
                     
                     MISSÃO:
@@ -291,8 +294,8 @@ else:
                           "enunciado": "Texto da questão",
                           {regras_json_alt},
                           "gabarito": "Letra correta ou Certo/Errado",
-                          "explicacao": "Fundamentação legal clara.",
-                          "fonte": "Origem validada conforme protocolo anti-alucinação"
+                          "explicacao": "Fundamentação legal clara e precisa baseada no ordenamento brasileiro.",
+                          "fonte": "Origem validada cruzando web e memória neural"
                         }}
                       ]
                     }}
@@ -302,7 +305,7 @@ else:
                         resposta = client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
                             model="llama-3.3-70b-versatile",
-                            temperature=0.0, # Zero margem para invenção
+                            temperature=0.1,
                             response_format={"type": "json_object"}
                         )
                         
@@ -315,7 +318,7 @@ else:
                             enunciado = dados.get("enunciado", "N/A")
                             gabarito = dados.get("gabarito", "N/A")
                             explicacao = dados.get("explicacao", "N/A")
-                            fonte = dados.get("fonte", f"Banco de dados histórico - {banca_alvo}")
+                            fonte = dados.get("fonte", "Fonte Pendente de Validação")
                             alts_dict = dados.get("alternativas", {})
                             
                             if "Inédita" in tipo:
