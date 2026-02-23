@@ -31,6 +31,7 @@ def iniciar_conexao():
     conn = sqlite3.connect("estudos.db", check_same_thread=False)
     c = conn.cursor()
     
+    # Tabela de Questões
     c.execute("""
     CREATE TABLE IF NOT EXISTS questoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,6 +39,7 @@ def iniciar_conexao():
         gabarito TEXT, explicacao TEXT, tipo TEXT, fonte TEXT
     )
     """)
+    # Tabela de Respostas
     c.execute("""
     CREATE TABLE IF NOT EXISTS respostas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,12 +47,19 @@ def iniciar_conexao():
         acertou INTEGER, data TEXT
     )
     """)
+    # NOVA Tabela de Editais Salvos
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS editais_salvos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_arquivo TEXT,
+        dados_json TEXT,
+        data_analise TEXT
+    )
+    """)
     
-    try:
-        c.execute("ALTER TABLE questoes ADD COLUMN alternativas TEXT")
+    try: c.execute("ALTER TABLE questoes ADD COLUMN alternativas TEXT")
     except: pass
-    try:
-        c.execute("ALTER TABLE questoes ADD COLUMN cargo TEXT")
+    try: c.execute("ALTER TABLE questoes ADD COLUMN cargo TEXT")
     except: pass
     
     conn.commit()
@@ -66,81 +75,99 @@ if "bateria_atual" not in st.session_state:
 if "dados_edital" not in st.session_state:
     st.session_state.dados_edital = None
 
-# ================= BARRA LATERAL (CONFIGURAÇÕES) =================
+# ================= BARRA LATERAL (BIBLIOTECA DE EDITAIS) =================
 with st.sidebar:
     st.title("⚙️ Sistema Base")
     st.divider()
     
-    st.header("1️⃣ Leitura de Edital")
-    st.write("Mapeamento inteligente de cargos e disciplinas.")
-    edital = st.file_uploader("Upload do Edital (PDF)", type="pdf")
+    st.header("1️⃣ Biblioteca de Editais")
+    
+    # Busca editais já salvos no banco
+    df_editais = pd.read_sql_query("SELECT id, nome_arquivo, dados_json FROM editais_salvos ORDER BY id DESC", conn)
+    
+    if not df_editais.empty:
+        opcoes_editais = ["Selecione um edital salvo..."] + df_editais['nome_arquivo'].tolist()
+        edital_selecionado = st.selectbox("Carregar Edital do Banco:", opcoes_editais)
+        
+        if edital_selecionado != "Selecione um edital salvo...":
+            # Carrega o JSON do banco de dados para a memória
+            json_salvo = df_editais[df_editais['nome_arquivo'] == edital_selecionado]['dados_json'].iloc[0]
+            st.session_state.dados_edital = json.loads(json_salvo)
+            st.success("Edital carregado da memória com sucesso!")
+    else:
+        st.info("Nenhum edital salvo no banco de dados ainda.")
 
-    if edital:
-        if st.button("Estruturar Edital", use_container_width=True):
-            with st.spinner("Rastreando cargos e matérias de forma otimizada..."):
-                with pdfplumber.open(edital) as pdf:
-                    texto = ""
-                    for pagina in pdf.pages:
-                        if pagina.extract_text():
-                            texto += pagina.extract_text() + "\n"
-                
-                # --- RADAR INTELIGENTE DE CONTEÚDO ---
-                texto_upper = texto.upper()
-                inicio = texto_upper.rfind("CONTEÚDO PROGRAMÁTICO")
-                
-                if inicio == -1:
-                    inicio = texto_upper.rfind("CONHECIMENTOS BÁSICOS")
-                if inicio == -1:
-                    inicio = texto_upper.rfind("OBJETOS DE AVALIAÇÃO")
-                if inicio == -1:
-                    inicio = max(0, len(texto) - 20000) 
-                
-                # RECORTE SEGURO: 20.000 caracteres garantem cerca de 7.000 tokens (bem abaixo dos 12.000)
-                texto_reduzido = texto[inicio : inicio + 20000]
+    st.write("---")
+    with st.expander("➕ Adicionar Novo Edital", expanded=True if df_editais.empty else False):
+        nome_novo_edital = st.text_input("Nome do Concurso (ex: PCDF - Delegado):")
+        edital_file = st.file_uploader("Upload do PDF", type="pdf")
 
-                prompt = f"""
-                Você é um especialista em análise de editais de concurso.
-                Leia o recorte do edital abaixo e extraia a Banca Examinadora e TODOS OS CARGOS com as suas respetivas DISCIPLINAS (Matérias).
-                
-                REGRA ABSOLUTA: NÃO extraia os subtópicos ou temas de cada matéria. Quero APENAS o nome do cargo e a lista simples das matérias cobradas.
-                
-                Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
-                {{
-                  "banca": "Nome da Banca",
-                  "cargos": {{
-                    "Nome do Cargo 1": ["Matéria 1", "Matéria 2", "Matéria 3"],
-                    "Nome do Cargo 2": ["Matéria 1", "Matéria 2"]
-                  }}
-                }}
-                
-                Texto a analisar: {texto_reduzido}
-                """
-
-                try:
-                    resposta = client.chat.completions.create(
-                        messages=[
-                            {"role": "system", "content": "Você responde estritamente em formato JSON válido e extrai apenas a lista de matérias."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        model="llama-3.3-70b-versatile",
-                        temperature=0.1,
-                        response_format={"type": "json_object"}
-                    )
+        if edital_file and nome_novo_edital:
+            if st.button("Analisar e Salvar no Banco", use_container_width=True):
+                with st.spinner("Rastreando cargos e matérias..."):
+                    with pdfplumber.open(edital_file) as pdf:
+                        texto = ""
+                        for pagina in pdf.pages:
+                            if pagina.extract_text():
+                                texto += pagina.extract_text() + "\n"
                     
-                    texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-                    dados = json.loads(texto_json)
-                    st.session_state.dados_edital = dados
-                    st.success("Matérias e cargos extraídos com máxima eficiência!")
-                except Exception as e:
-                    st.error(f"Erro ao analisar o edital: {e}")
+                    texto_upper = texto.upper()
+                    inicio = texto_upper.rfind("CONTEÚDO PROGRAMÁTICO")
+                    if inicio == -1: inicio = texto_upper.rfind("CONHECIMENTOS BÁSICOS")
+                    if inicio == -1: inicio = texto_upper.rfind("OBJETOS DE AVALIAÇÃO")
+                    if inicio == -1: inicio = max(0, len(texto) - 20000) 
+                    
+                    texto_reduzido = texto[inicio : inicio + 20000]
+
+                    prompt = f"""
+                    Você é um especialista em análise de editais.
+                    Leia o recorte do edital e extraia a Banca e TODOS OS CARGOS com as suas DISCIPLINAS (Matérias).
+                    NÃO extraia subtópicos.
+                    
+                    Responda EXCLUSIVAMENTE em formato JSON:
+                    {{
+                      "banca": "Nome da Banca",
+                      "cargos": {{
+                        "Cargo 1": ["Matéria 1", "Matéria 2"],
+                        "Cargo 2": ["Matéria 1"]
+                      }}
+                    }}
+                    Texto a analisar: {texto_reduzido}
+                    """
+
+                    try:
+                        resposta = client.chat.completions.create(
+                            messages=[
+                                {"role": "system", "content": "Responda estritamente em JSON válido."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            model="llama-3.3-70b-versatile",
+                            temperature=0.1,
+                            response_format={"type": "json_object"}
+                        )
+                        
+                        texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
+                        
+                        # Salva no Banco de Dados
+                        c.execute("""
+                        INSERT INTO editais_salvos (nome_arquivo, dados_json, data_analise)
+                        VALUES (?, ?, ?)
+                        """, (nome_novo_edital, texto_json, str(datetime.now())))
+                        conn.commit()
+                        
+                        st.session_state.dados_edital = json.loads(texto_json)
+                        st.success("Análise concluída e salva no banco de dados!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao analisar o edital: {e}")
 
     st.divider()
-    st.header("⚠️ Reset do Sistema")
-    if st.button("Zerar Todo o Histórico", use_container_width=True):
+    st.header("⚠️ Gestão de Dados")
+    if st.button("Limpar Histórico de Respostas", use_container_width=True):
         c.execute("DELETE FROM respostas")
         conn.commit()
         st.session_state.bateria_atual = []
-        st.success("Histórico limpo!")
+        st.success("Histórico de desempenho limpo!")
         st.rerun()
 
     st.divider()
@@ -194,7 +221,7 @@ with st.container(border=True):
             tema_selecionado = st.text_input("3. Especifique um Tema (ou deixe Aleatório)", "Aleatório")
             
     else:
-        st.warning("Nenhum edital estruturado foi carregado. Faça o upload ou use o modo manual abaixo.")
+        st.warning("Nenhum edital carregado. Selecione um na biblioteca ao lado ou cadastre um novo.")
         c1, c2 = st.columns(2)
         with c1: materia_selecionada = st.text_input("Matéria (ex: Direito Penal)", "Aleatório")
         with c2: tema_selecionado = st.text_input("Tema (ex: Inquérito Policial)", "Aleatório")
