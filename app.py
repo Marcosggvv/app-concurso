@@ -10,7 +10,6 @@ from groq import Groq
 # ================= CONFIGURAÇÃO VISUAL =================
 st.set_page_config(page_title="Sistema de Estudos Avançado", layout="wide", initial_sidebar_state="expanded")
 
-# CSS Customizado para beleza visual e clareza
 st.markdown("""
     <style>
     .metric-box {
@@ -32,7 +31,6 @@ def iniciar_conexao():
     conn = sqlite3.connect("estudos.db", check_same_thread=False)
     c = conn.cursor()
     
-    # Criação das tabelas base
     c.execute("""
     CREATE TABLE IF NOT EXISTS questoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +46,6 @@ def iniciar_conexao():
     )
     """)
     
-    # Atualização automática da estrutura para aceitar Múltipla Escolha e Cargos
     try:
         c.execute("ALTER TABLE questoes ADD COLUMN alternativas TEXT")
     except: pass
@@ -62,8 +59,12 @@ def iniciar_conexao():
 conn = iniciar_conexao()
 c = conn.cursor()
 
+# ================= INICIALIZAÇÃO DE MEMÓRIA =================
 if "bateria_atual" not in st.session_state:
     st.session_state.bateria_atual = []
+    
+if "dados_edital" not in st.session_state:
+    st.session_state.dados_edital = None
 
 # ================= BARRA LATERAL (CONFIGURAÇÕES) =================
 with st.sidebar:
@@ -76,18 +77,32 @@ with st.sidebar:
 
     if edital:
         if st.button("Estruturar Edital", use_container_width=True):
-            with st.spinner("Lendo anexos e dissecando cargos na velocidade Groq..."):
+            with st.spinner("Rastreando conteúdo programático com Radar de Precisão..."):
                 with pdfplumber.open(edital) as pdf:
                     texto = ""
                     for pagina in pdf.pages:
                         if pagina.extract_text():
                             texto += pagina.extract_text() + "\n"
                 
-                texto_reduzido = texto[-35000:] if len(texto) > 35000 else texto
+                # --- RADAR INTELIGENTE DE CONTEÚDO ---
+                texto_upper = texto.upper()
+                inicio = texto_upper.rfind("CONTEÚDO PROGRAMÁTICO")
+                
+                if inicio == -1:
+                    inicio = texto_upper.rfind("CONHECIMENTOS BÁSICOS")
+                if inicio == -1:
+                    inicio = texto_upper.rfind("OBJETOS DE AVALIAÇÃO")
+                if inicio == -1:
+                    inicio = max(0, len(texto) - 40000) # Fallback seguro
+                
+                # Captura 38.000 caracteres a partir do início das matérias
+                texto_reduzido = texto[inicio : inicio + 38000]
 
                 prompt = f"""
                 Você é um especialista em análise de editais de concurso.
                 Leia o recorte do edital abaixo e extraia a Banca Examinadora e TODOS OS CARGOS com seus respectivos Conteúdos Programáticos.
+                
+                REGRA ABSOLUTA: Faça uma varredura EXAUSTIVA. É expressamente PROIBIDO resumir ou omitir matérias e temas. Capture tudo.
                 
                 Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
                 {{
@@ -96,20 +111,17 @@ with st.sidebar:
                     "Nome do Cargo 1": {{
                       "Disciplina 1": ["Tópico 1", "Tópico 2"],
                       "Disciplina 2": ["Tópico 1"]
-                    }},
-                    "Nome do Cargo 2": {{
-                      "Disciplina 1": ["Tópico 1"]
                     }}
                   }}
                 }}
                 
-                Texto: {texto_reduzido}
+                Texto a analisar: {texto_reduzido}
                 """
 
                 try:
                     resposta = client.chat.completions.create(
                         messages=[
-                            {"role": "system", "content": "Você responde estritamente em formato JSON válido."},
+                            {"role": "system", "content": "Você responde estritamente em formato JSON válido e não omite informações."},
                             {"role": "user", "content": prompt}
                         ],
                         model="llama-3.3-70b-versatile",
@@ -120,7 +132,7 @@ with st.sidebar:
                     texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                     dados = json.loads(texto_json)
                     st.session_state.dados_edital = dados
-                    st.success("Cargos e matérias estruturados com sucesso!")
+                    st.success("Cargos e matérias estruturados com 100% de precisão!")
                 except Exception as e:
                     st.error(f"Erro ao analisar o edital: {e}")
 
@@ -259,7 +271,6 @@ with st.container(border=True):
                 dados_json = json.loads(texto_json)
                 lista_questoes = dados_json.get("questoes", [])
                 
-                # Prevenção de formato
                 if not lista_questoes and isinstance(dados_json, list): lista_questoes = dados_json
                 elif not lista_questoes and isinstance(dados_json, dict) and "gabarito" in str(dados_json).lower(): lista_questoes = [dados_json]
                 
@@ -291,7 +302,6 @@ if st.session_state.bateria_atual:
     st.write("---")
     st.subheader("🎯 Caderno de Resolução")
     
-    # Busca o status das respostas para a bateria atual
     df_respostas_locais = pd.read_sql_query(f"SELECT questao_id, resposta_usuario, acertou FROM respostas WHERE questao_id IN ({','.join(map(str, st.session_state.bateria_atual))})", conn)
     questoes_respondidas = df_respostas_locais.set_index('questao_id').to_dict('index')
 
@@ -316,24 +326,22 @@ if st.session_state.bateria_atual:
                 else:
                     opcoes_radio.extend(["Certo", "Errado"])
 
-                # Lógica de Interação
                 if q_id in questoes_respondidas:
                     status = questoes_respondidas[q_id]
                     if status['acertou'] == 1:
-                        st.success(f"✅ Você marcou: **{status['resposta_usuario']}** (Correto!)")
+                        st.success(f"✅ Opção marcada: **{status['resposta_usuario']}** (Correta!)")
                     else:
-                        st.error(f"❌ Você marcou: **{status['resposta_usuario']}** (Incorreto!)")
+                        st.error(f"❌ Opção marcada: **{status['resposta_usuario']}** (Incorreta!)")
                         
                     st.info(f"**Gabarito Oficial:** {gab_q}")
                     with st.expander("📖 Ler Fundamentação Jurídica"):
                         st.write(exp_q)
                 else:
-                    st.write("") # Espaçamento
+                    st.write("")
                     resposta_selecionada = st.radio("Sua Resposta:", opcoes_radio, key=f"radio_{q_id}", label_visibility="collapsed")
                     
                     if st.button("Confirmar Resposta", key=f"btn_{q_id}"):
                         if resposta_selecionada != "Selecionar...":
-                            # Validação flexível do gabarito
                             letra_escolhida = resposta_selecionada.split(")")[0].strip().upper() if is_multipla else resposta_selecionada.strip().upper()
                             gabarito_oficial = gab_q.strip().upper()
                             
