@@ -1,6 +1,5 @@
 import streamlit as st
 import sqlite3
-import pdfplumber
 import pandas as pd
 from datetime import datetime
 import json
@@ -12,10 +11,7 @@ st.set_page_config(page_title="Sistema de Estudos Avançado", layout="wide", ini
 
 st.markdown("""
     <style>
-    .metric-box {
-        background-color: #f8f9fa; border-radius: 10px; padding: 20px; text-align: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e9ecef;
-    }
+    .metric-box { background-color: #f8f9fa; border-radius: 10px; padding: 20px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e9ecef; }
     .metric-title { font-size: 14px; color: #6c757d; font-weight: 600; text-transform: uppercase; }
     .metric-value { font-size: 32px; font-weight: 700; color: #212529; margin-top: 5px; }
     .stRadio > div { flex-direction: row; gap: 15px; }
@@ -28,40 +24,39 @@ client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 # ================= BANCO DE DADOS =================
 @st.cache_resource
 def iniciar_conexao():
-    conn = sqlite3.connect("estudos.db", check_same_thread=False)
+    conn = sqlite3.connect("estudos_multi_user.db", check_same_thread=False)
     c = conn.cursor()
     
-    # Tabela de Questões
+    # Usuários
+    c.execute("""CREATE TABLE IF NOT EXISTS usuarios (nome TEXT PRIMARY KEY)""")
+    
+    # Questões (Banco Global Compartilhado)
     c.execute("""
     CREATE TABLE IF NOT EXISTS questoes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        materia TEXT, tema TEXT, enunciado TEXT,
-        gabarito TEXT, explicacao TEXT, tipo TEXT, fonte TEXT
+        banca TEXT, cargo TEXT, materia TEXT, tema TEXT,
+        enunciado TEXT, alternativas TEXT, gabarito TEXT,
+        explicacao TEXT, tipo TEXT, fonte TEXT
     )
     """)
-    # Tabela de Respostas
+    
+    # Respostas (Progresso Individual)
     c.execute("""
     CREATE TABLE IF NOT EXISTS respostas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        questao_id INTEGER, resposta_usuario TEXT,
+        usuario TEXT, questao_id INTEGER, resposta_usuario TEXT,
         acertou INTEGER, data TEXT
     )
     """)
-    # NOVA Tabela de Editais Salvos
+    
+    # Editais Salvos (Biblioteca Individual)
     c.execute("""
     CREATE TABLE IF NOT EXISTS editais_salvos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome_arquivo TEXT,
-        dados_json TEXT,
-        data_analise TEXT
+        usuario TEXT, nome_concurso TEXT, banca TEXT, cargo TEXT,
+        dados_json TEXT, data_analise TEXT
     )
     """)
-    
-    try: c.execute("ALTER TABLE questoes ADD COLUMN alternativas TEXT")
-    except: pass
-    try: c.execute("ALTER TABLE questoes ADD COLUMN cargo TEXT")
-    except: pass
-    
     conn.commit()
     return conn
 
@@ -69,308 +64,276 @@ conn = iniciar_conexao()
 c = conn.cursor()
 
 # ================= INICIALIZAÇÃO DE MEMÓRIA =================
-if "bateria_atual" not in st.session_state:
-    st.session_state.bateria_atual = []
-    
-if "dados_edital" not in st.session_state:
-    st.session_state.dados_edital = None
+if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = None
+if "bateria_atual" not in st.session_state: st.session_state.bateria_atual = []
+if "edital_ativo" not in st.session_state: st.session_state.edital_ativo = None
 
-# ================= BARRA LATERAL (BIBLIOTECA DE EDITAIS) =================
+# ================= BARRA LATERAL =================
 with st.sidebar:
-    st.title("⚙️ Sistema Base")
-    st.divider()
+    st.title("👤 Identificação")
     
-    st.header("1️⃣ Biblioteca de Editais")
+    # Gestão de Usuários
+    df_users = pd.read_sql_query("SELECT nome FROM usuarios", conn)
+    lista_users = df_users['nome'].tolist()
     
-    # Busca editais já salvos no banco
-    df_editais = pd.read_sql_query("SELECT id, nome_arquivo, dados_json FROM editais_salvos ORDER BY id DESC", conn)
+    usuario_selecionado = st.selectbox("Selecione seu Perfil", ["Novo Usuário..."] + lista_users)
     
-    if not df_editais.empty:
-        opcoes_editais = ["Selecione um edital salvo..."] + df_editais['nome_arquivo'].tolist()
-        edital_selecionado = st.selectbox("Carregar Edital do Banco:", opcoes_editais)
-        
-        if edital_selecionado != "Selecione um edital salvo...":
-            # Carrega o JSON do banco de dados para a memória
-            json_salvo = df_editais[df_editais['nome_arquivo'] == edital_selecionado]['dados_json'].iloc[0]
-            st.session_state.dados_edital = json.loads(json_salvo)
-            st.success("Edital carregado da memória com sucesso!")
+    if usuario_selecionado == "Novo Usuário...":
+        novo_nome = st.text_input("Digite seu Nome/Login:")
+        if st.button("Criar e Entrar", use_container_width=True) and novo_nome:
+            try:
+                c.execute("INSERT INTO usuarios (nome) VALUES (?)", (novo_nome.strip(),))
+                conn.commit()
+                st.session_state.usuario_atual = novo_nome.strip()
+                st.success(f"Bem-vindo, {novo_nome}!")
+                st.rerun()
+            except sqlite3.IntegrityError:
+                st.error("Este nome já existe.")
     else:
-        st.info("Nenhum edital salvo no banco de dados ainda.")
+        st.session_state.usuario_atual = usuario_selecionado
 
-    st.write("---")
-    with st.expander("➕ Adicionar Novo Edital", expanded=True if df_editais.empty else False):
-        nome_novo_edital = st.text_input("Nome do Concurso (ex: PCDF - Delegado):")
-        edital_file = st.file_uploader("Upload do PDF", type="pdf")
+    st.divider()
 
-        if edital_file and nome_novo_edital:
-            if st.button("Analisar e Salvar no Banco", use_container_width=True):
-                with st.spinner("Rastreando cargos e matérias..."):
-                    with pdfplumber.open(edital_file) as pdf:
-                        texto = ""
-                        for pagina in pdf.pages:
-                            if pagina.extract_text():
-                                texto += pagina.extract_text() + "\n"
-                    
-                    texto_upper = texto.upper()
-                    inicio = texto_upper.rfind("CONTEÚDO PROGRAMÁTICO")
-                    if inicio == -1: inicio = texto_upper.rfind("CONHECIMENTOS BÁSICOS")
-                    if inicio == -1: inicio = texto_upper.rfind("OBJETOS DE AVALIAÇÃO")
-                    if inicio == -1: inicio = max(0, len(texto) - 20000) 
-                    
-                    texto_reduzido = texto[inicio : inicio + 20000]
+    # Só mostra o resto se houver usuário logado
+    if st.session_state.usuario_atual:
+        st.header("📚 Seus Editais")
+        
+        # Busca editais do usuário logado
+        df_editais = pd.read_sql_query("SELECT id, nome_concurso, banca, cargo, dados_json FROM editais_salvos WHERE usuario = ? ORDER BY id DESC", conn, params=(st.session_state.usuario_atual,))
+        
+        if not df_editais.empty:
+            opcoes_editais = ["Selecione um edital..."] + [f"{row['nome_concurso']} ({row['cargo']})" for _, row in df_editais.iterrows()]
+            escolha = st.selectbox("Carregar Edital Salvo:", opcoes_editais)
+            
+            if escolha != "Selecione um edital...":
+                idx_selecionado = opcoes_editais.index(escolha) - 1
+                linha_selecionada = df_editais.iloc[idx_selecionado]
+                
+                st.session_state.edital_ativo = {
+                    "nome_concurso": linha_selecionada['nome_concurso'],
+                    "banca": linha_selecionada['banca'],
+                    "cargo": linha_selecionada['cargo'],
+                    "materias": json.loads(linha_selecionada['dados_json'])['materias']
+                }
+                st.success("Edital carregado e pronto para uso!")
+        else:
+            st.info("Sua biblioteca está vazia. Adicione um edital abaixo.")
 
+        st.write("---")
+        with st.expander("➕ Cadastrar Novo Edital", expanded=True if df_editais.empty else False):
+            nome_novo = st.text_input("Nome do Concurso (Ex: PCSP):")
+            banca_nova = st.text_input("Banca Examinadora (Ex: Vunesp, Cebraspe):")
+            cargo_novo = st.text_input("Cargo (Ex: Delegado, Escrivão):")
+            texto_colado = st.text_area("Cole o texto do Conteúdo Programático aqui:")
+
+            if st.button("Salvar Edital no Perfil", use_container_width=True) and nome_novo and texto_colado:
+                with st.spinner("Estruturando matérias..."):
                     prompt = f"""
-                    Você é um especialista em análise de editais.
-                    Leia o recorte do edital e extraia a Banca e TODOS OS CARGOS com as suas DISCIPLINAS (Matérias).
-                    NÃO extraia subtópicos.
+                    Leia o texto colado abaixo e liste APENAS os nomes das grandes áreas ou disciplinas (ex: Direito Penal, Língua Portuguesa).
+                    Não inclua os temas ou subtópicos.
                     
-                    Responda EXCLUSIVAMENTE em formato JSON:
-                    {{
-                      "banca": "Nome da Banca",
-                      "cargos": {{
-                        "Cargo 1": ["Matéria 1", "Matéria 2"],
-                        "Cargo 2": ["Matéria 1"]
-                      }}
-                    }}
-                    Texto a analisar: {texto_reduzido}
+                    Responda EXCLUSIVAMENTE em formato JSON com esta estrutura:
+                    {{"materias": ["Disciplina 1", "Disciplina 2"]}}
+                    
+                    Texto: {texto_colado[:15000]}
                     """
-
                     try:
                         resposta = client.chat.completions.create(
-                            messages=[
-                                {"role": "system", "content": "Responda estritamente em JSON válido."},
-                                {"role": "user", "content": prompt}
-                            ],
+                            messages=[{"role": "user", "content": prompt}],
                             model="llama-3.3-70b-versatile",
                             temperature=0.1,
                             response_format={"type": "json_object"}
                         )
+                        texto_json = resposta.choices[0].message.content
+                        dados = json.loads(texto_json)
                         
-                        texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-                        
-                        # Salva no Banco de Dados
                         c.execute("""
-                        INSERT INTO editais_salvos (nome_arquivo, dados_json, data_analise)
-                        VALUES (?, ?, ?)
-                        """, (nome_novo_edital, texto_json, str(datetime.now())))
+                        INSERT INTO editais_salvos (usuario, nome_concurso, banca, cargo, dados_json, data_analise)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """, (st.session_state.usuario_atual, nome_novo, banca_nova, cargo_novo, texto_json, str(datetime.now())))
                         conn.commit()
                         
-                        st.session_state.dados_edital = json.loads(texto_json)
-                        st.success("Análise concluída e salva no banco de dados!")
+                        st.success("Salvo com sucesso!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro ao analisar o edital: {e}")
+                        st.error("Erro ao estruturar. Tente novamente.")
 
-    st.divider()
-    st.header("⚠️ Gestão de Dados")
-    if st.button("Limpar Histórico de Respostas", use_container_width=True):
-        c.execute("DELETE FROM respostas")
-        conn.commit()
-        st.session_state.bateria_atual = []
-        st.success("Histórico de desempenho limpo!")
-        st.rerun()
+        st.divider()
+        if st.button("Zerar Meu Progresso", use_container_width=True):
+            c.execute("DELETE FROM respostas WHERE usuario = ?", (st.session_state.usuario_atual,))
+            conn.commit()
+            st.session_state.bateria_atual = []
+            st.success("Seu histórico foi apagado!")
+            st.rerun()
 
-    st.divider()
-    st.markdown("### 👨‍💻 Desenvolvedor")
-    st.caption("Criado e projetado por **Marcos Gonçalves Versiane**.")
-    st.markdown("🌐 [Aceder a marcosversiane.com](https://marcosversiane.com)")
-
-# ================= PAINEL ÚNICO PRINCIPAL =================
-st.title("📚 Plataforma Integrada de Resolução")
-st.markdown("##### *Criado por Marcos Versiane*")
-st.write("---")
-
-# --- 1. DASHBOARD DE DESEMPENHO NO TOPO ---
-df_resp = pd.read_sql_query("SELECT * FROM respostas", conn)
-total_resp = len(df_resp)
-taxa_acerto = round((df_resp["acertou"].sum() / total_resp) * 100, 1) if total_resp > 0 else 0
-acertos = df_resp["acertou"].sum() if total_resp > 0 else 0
-
-colA, colB, colC = st.columns(3)
-with colA:
-    st.markdown(f'<div class="metric-box"><div class="metric-title">Itens Resolvidos</div><div class="metric-value">{total_resp}</div></div>', unsafe_allow_html=True)
-with colB:
-    st.markdown(f'<div class="metric-box"><div class="metric-title">Acertos</div><div class="metric-value">{acertos}</div></div>', unsafe_allow_html=True)
-with colC:
-    st.markdown(f'<div class="metric-box"><div class="metric-title">Aproveitamento Total</div><div class="metric-value" style="color: {"#28a745" if taxa_acerto >= 70 else "#dc3545"};">{taxa_acerto}%</div></div>', unsafe_allow_html=True)
-
-st.write("<br>", unsafe_allow_html=True)
-
-# --- 2. CONFIGURAÇÃO DO LOTE DE QUESTÕES ---
-with st.container(border=True):
-    st.subheader("⚡ Configurar Nova Bateria de Questões")
-    
-    banca_edital = "Estilo da Banca"
-    lista_cargos = ["Geral"]
-    cargo_selecionado = "Geral"
-    
-    if st.session_state.dados_edital and "cargos" in st.session_state.dados_edital:
-        banca_edital = st.session_state.dados_edital.get("banca", "Cebraspe")
-        st.caption(f"🎯 **Banca Alvo Identificada:** {banca_edital}")
-        
-        lista_cargos = list(st.session_state.dados_edital["cargos"].keys())
-        cargo_selecionado = st.selectbox("1. Selecione o Cargo Foco", lista_cargos)
-        
-        lista_materias_edital = st.session_state.dados_edital["cargos"][cargo_selecionado]
-        lista_materias = ["Aleatório"] + lista_materias_edital
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            materia_selecionada = st.selectbox("2. Escolha a Matéria", lista_materias)
-        with c2:
-            tema_selecionado = st.text_input("3. Especifique um Tema (ou deixe Aleatório)", "Aleatório")
-            
-    else:
-        st.warning("Nenhum edital carregado. Selecione um na biblioteca ao lado ou cadastre um novo.")
-        c1, c2 = st.columns(2)
-        with c1: materia_selecionada = st.text_input("Matéria (ex: Direito Penal)", "Aleatório")
-        with c2: tema_selecionado = st.text_input("Tema (ex: Inquérito Policial)", "Aleatório")
-
-    c3, c4 = st.columns([2, 1])
-    with c3:
-        tipo = st.selectbox("Origem do Material", ["Inédita IA (Mimetizar Estilo da Banca)", "Questões Reais de Provas Anteriores"])
-    with c4:
-        quantidade = st.slider("Quantidade de Questões", 1, 10, 5)
-
-    if st.button("Gerar Material e Iniciar Resolução", type="primary", use_container_width=True):
-        with st.spinner(f"A moldar {quantidade} questão(ões) para o cargo de {cargo_selecionado}..."):
-            mat_final = materia_selecionada
-            tem_final = tema_selecionado
-            
-            if st.session_state.dados_edital and "cargos" in st.session_state.dados_edital:
-                if mat_final == "Aleatório":
-                    mat_final = random.choice(lista_materias_edital)
-
-            fator_aleatorio = random.randint(10000, 99999)
-            instrucao_tema = f"Sorteie um tema de elevada complexidade dentro da matéria de {mat_final}" if tem_final.lower() == "aleatório" else tem_final
-
-            prompt = f"""
-            Aja como um examinador de concursos públicos do Brasil.
-            Gere exatamente {quantidade} questão(ões) distinta(s) sobre:
-            Banca: {banca_edital}
-            Cargo Avaliado: {cargo_selecionado}
-            Matéria: {mat_final}
-            Tema: {instrucao_tema}
-            Diretriz: {tipo}
-            Exclusividade: {fator_aleatorio}
-            
-            REGRAS ABSOLUTAS:
-            1. Fundamente a explicação ESTRITAMENTE na legislação brasileira vigente e nas normas brasileiras em geral. Jamais invente jurisprudência ou algo do tipo. Seja assertivo e responsável.
-            2. Nível de dificuldade compatível com as exigências para o cargo de {cargo_selecionado}.
-            3. MIMETIZE A BANCA: Se a banca {banca_edital} cobra Múltipla Escolha (A, B, C, D, E), crie obrigatoriamente alternativas. Se a banca cobra Certo/Errado (ex: Cebraspe), faça afirmativas simples.
-            
-            Responda EXCLUSIVAMENTE em formato JSON, utilizando EXATAMENTE a seguinte estrutura:
-            {{
-              "questoes": [
-                {{
-                  "enunciado": "O texto da questão ou afirmativa",
-                  "alternativas": {{
-                    "A": "texto", "B": "texto", "C": "texto", "D": "texto", "E": "texto"
-                  }}, // Deixe vazio {{}} SE for banca de Certo/Errado.
-                  "gabarito": "Indique a Letra correta ou escreva Certo ou Errado",
-                  "explicacao": "Explicação completa, assertiva e alicerçada nas normas brasileiras.",
-                  "fonte": "Indique o Ano/Órgão ou Inédita IA"
-                }}
-              ]
-            }}
-            """
-
-            try:
-                resposta = client.chat.completions.create(
-                    messages=[
-                        {"role": "system", "content": "Você responde estritamente em formato JSON válido, respeitando o ordenamento jurídico brasileiro."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    model="llama-3.3-70b-versatile",
-                    temperature=0.3,
-                    response_format={"type": "json_object"}
-                )
-                
-                texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-                dados_json = json.loads(texto_json)
-                lista_questoes = dados_json.get("questoes", [])
-                
-                if not lista_questoes and isinstance(dados_json, list): lista_questoes = dados_json
-                elif not lista_questoes and isinstance(dados_json, dict) and "gabarito" in str(dados_json).lower(): lista_questoes = [dados_json]
-                
-                novas_questoes_ids = []
-
-                for dados in lista_questoes:
-                    enunciado = dados.get("enunciado", "Enunciado não disponível")
-                    gabarito = dados.get("gabarito", "Não informado")
-                    explicacao = dados.get("explicacao", "Sem explicação")
-                    fonte = dados.get("fonte", "N/A")
-                    alternativas_json = json.dumps(dados.get("alternativas", {}))
-
-                    c.execute("""
-                    INSERT INTO questoes (cargo, materia, tema, enunciado, alternativas, gabarito, explicacao, tipo, fonte)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (cargo_selecionado, mat_final, tem_final, enunciado, alternativas_json, gabarito, explicacao, tipo, fonte))
-                    
-                    novas_questoes_ids.append(c.lastrowid)
-                
-                conn.commit()
-                st.session_state.bateria_atual = novas_questoes_ids
-                st.success(f"Banco atualizado com {len(lista_questoes)} novas questões!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao forjar as questões: {e}")
-
-# --- 3. FEED DE RESOLUÇÃO CONTÍNUA ---
-if st.session_state.bateria_atual:
+# ================= TELA PRINCIPAL =================
+if not st.session_state.usuario_atual:
+    st.title("🔒 Bem-vindo ao Sistema")
+    st.info("Por favor, selecione ou crie o seu perfil na barra lateral para iniciar a sessão de estudos.")
+else:
+    st.title(f"📚 Plataforma de Resolução - {st.session_state.usuario_atual}")
     st.write("---")
-    st.subheader("🎯 Caderno de Resolução")
-    
-    df_respostas_locais = pd.read_sql_query(f"SELECT questao_id, resposta_usuario, acertou FROM respostas WHERE questao_id IN ({','.join(map(str, st.session_state.bateria_atual))})", conn)
-    questoes_respondidas = df_respostas_locais.set_index('questao_id').to_dict('index')
 
-    for index, q_id in enumerate(st.session_state.bateria_atual):
-        c.execute("SELECT cargo, materia, tema, enunciado, alternativas, gabarito, explicacao, fonte FROM questoes WHERE id = ?", (q_id,))
-        dados_q = c.fetchone()
+    # --- DASHBOARD DO USUÁRIO ---
+    df_resp = pd.read_sql_query("SELECT * FROM respostas WHERE usuario = ?", conn, params=(st.session_state.usuario_atual,))
+    total_resp = len(df_resp)
+    taxa_acerto = round((df_resp["acertou"].sum() / total_resp) * 100, 1) if total_resp > 0 else 0
+    acertos = df_resp["acertou"].sum() if total_resp > 0 else 0
+
+    colA, colB, colC = st.columns(3)
+    with colA: st.markdown(f'<div class="metric-box"><div class="metric-title">Itens Resolvidos</div><div class="metric-value">{total_resp}</div></div>', unsafe_allow_html=True)
+    with colB: st.markdown(f'<div class="metric-box"><div class="metric-title">Acertos</div><div class="metric-value">{acertos}</div></div>', unsafe_allow_html=True)
+    with colC: st.markdown(f'<div class="metric-box"><div class="metric-title">Aproveitamento</div><div class="metric-value" style="color: {"#28a745" if taxa_acerto >= 70 else "#dc3545"};">{taxa_acerto}%</div></div>', unsafe_allow_html=True)
+
+    st.write("<br>", unsafe_allow_html=True)
+
+    # --- CONFIGURAÇÃO DE LOTE ---
+    with st.container(border=True):
+        st.subheader("⚡ Gerar Bateria de Simulado")
         
-        if dados_q:
-            cargo_q, mat_q, tema_q, enun_q, alt_json_q, gab_q, exp_q, fonte_q = dados_q
-            alternativas_dict = json.loads(alt_json_q) if alt_json_q else {}
+        if st.session_state.edital_ativo:
+            e = st.session_state.edital_ativo
+            banca_alvo = e['banca']
+            cargo_alvo = e['cargo']
+            st.caption(f"🎯 **Foco Atual:** {e['nome_concurso']} | **Banca:** {banca_alvo} | **Cargo:** {cargo_alvo}")
             
-            with st.container(border=True):
-                st.caption(f"**Questão {index + 1}** | 📚 {mat_q} | 💼 {cargo_q} | 🏷️ {fonte_q}")
-                st.markdown(f"#### {enun_q}")
-                
-                is_multipla = len(alternativas_dict) > 0
-                opcoes_radio = ["Selecionar..."]
-                
-                if is_multipla:
-                    for letra, texto_alt in alternativas_dict.items():
-                        opcoes_radio.append(f"{letra}) {texto_alt}")
-                else:
-                    opcoes_radio.extend(["Certo", "Errado"])
+            lista_materias = ["Aleatório"] + e['materias']
+            c1, c2 = st.columns(2)
+            with c1: mat_selecionada = st.selectbox("Escolha a Matéria", lista_materias)
+            with c2: tema_selecionado = st.text_input("Tema específico (ou deixe Aleatório)", "Aleatório")
+        else:
+            st.warning("Carregue um edital na barra lateral para focar a inteligência, ou preencha manualmente.")
+            c1, c2, c3 = st.columns(3)
+            with c1: banca_alvo = st.text_input("Banca", "Cebraspe")
+            with c2: cargo_alvo = st.text_input("Cargo", "Geral")
+            with c3: mat_selecionada = st.text_input("Matéria", "Direito Constitucional")
+            tema_selecionado = st.text_input("Tema específico", "Aleatório")
 
-                if q_id in questoes_respondidas:
-                    status = questoes_respondidas[q_id]
-                    if status['acertou'] == 1:
-                        st.success(f"✅ Opção marcada: **{status['resposta_usuario']}** (Correta!)")
-                    else:
-                        st.error(f"❌ Opção marcada: **{status['resposta_usuario']}** (Incorreta!)")
-                        
-                    st.info(f"**Gabarito Oficial:** {gab_q}")
-                    with st.expander("📖 Ler Fundamentação Jurídica"):
-                        st.write(exp_q)
-                else:
-                    st.write("")
-                    resposta_selecionada = st.radio("Sua Resposta:", opcoes_radio, key=f"radio_{q_id}", label_visibility="collapsed")
+        c3, c4 = st.columns([2, 1])
+        with c3: tipo = st.selectbox("Origem do Material", ["Inédita IA (Estilo da Banca)", "Buscar no Banco de Dados / Questões Reais"])
+        with c4: qtd = st.slider("Quantidade", 1, 10, 5)
+
+        if st.button("Forjar Simulado", type="primary", use_container_width=True):
+            if "Inédita" in tipo:
+                with st.spinner(f"A criar {qtd} itens inéditos no padrão {banca_alvo}..."):
+                    mat_final = random.choice(e['materias']) if mat_selecionada == "Aleatório" and st.session_state.edital_ativo else mat_selecionada
+                    instrucao_tema = f"Sorteie um tema de alta complexidade em {mat_final}" if tema_selecionado.lower() == "aleatório" else tema_selecionado
+
+                    prompt = f"""
+                    Você é a banca examinadora {banca_alvo}.
+                    Gere {qtd} questão(ões) distinta(s) para o cargo de {cargo_alvo}.
+                    Matéria: {mat_final}
+                    Tema: {instrucao_tema}
                     
-                    if st.button("Confirmar Resposta", key=f"btn_{q_id}"):
-                        if resposta_selecionada != "Selecionar...":
-                            letra_escolhida = resposta_selecionada.split(")")[0].strip().upper() if is_multipla else resposta_selecionada.strip().upper()
-                            gabarito_oficial = gab_q.strip().upper()
-                            
-                            acertou = 1 if letra_escolhida in gabarito_oficial or gabarito_oficial in letra_escolhida else 0
-                            
+                    REGRAS ABSOLUTAS E INEGOCIÁVEIS:
+                    1. ESTILO DA BANCA: Se a banca {banca_alvo} tem histórico de Certo/Errado (ex: Cebraspe, Quadrix), faça afirmativas para julgamento (deixe o campo 'alternativas' vazio). Se for múltipla escolha (ex: FGV, Vunesp, FCC), crie obrigatoriamente alternativas A, B, C, D e E.
+                    2. RIGOR JURÍDICO: Fundamente a explicação ESTRITAMENTE na legislação brasileira, CF/88 e jurisprudência consolidada (STF/STJ). Jamais invente súmulas ou leis. Seja responsável e assertivo na resposta.
+                    3. DIFICULDADE: Calibre rigorosamente o nível para o cargo de {cargo_alvo}.
+                    
+                    Responda em formato JSON, EXATAMENTE assim:
+                    {{
+                      "questoes": [
+                        {{
+                          "enunciado": "Texto da questão",
+                          "alternativas": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, // Vazio se for Certo/Errado
+                          "gabarito": "Letra correta ou Certo/Errado",
+                          "explicacao": "Fundamentação legal e jurisprudencial detalhada."
+                        }}
+                      ]
+                    }}
+                    """
+
+                    try:
+                        resposta = client.chat.completions.create(
+                            messages=[{"role": "user", "content": prompt}],
+                            model="llama-3.3-70b-versatile",
+                            temperature=0.3,
+                            response_format={"type": "json_object"}
+                        )
+                        
+                        dados_json = json.loads(resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip())
+                        lista_questoes = dados_json.get("questoes", [])
+                        if not lista_questoes and isinstance(dados_json, list): lista_questoes = dados_json
+                        
+                        novas_ids = []
+                        for dados in lista_questoes:
+                            enunciado = dados.get("enunciado", "N/A")
+                            gabarito = dados.get("gabarito", "N/A")
+                            explicacao = dados.get("explicacao", "N/A")
+                            alternativas = json.dumps(dados.get("alternativas", {}))
+
                             c.execute("""
-                            INSERT INTO respostas (questao_id, resposta_usuario, acertou, data)
-                            VALUES (?, ?, ?, ?)
-                            """, (q_id, letra_escolhida, acertou, str(datetime.now())))
-                            conn.commit()
-                            st.rerun()
-                        else:
-                            st.warning("Selecione uma alternativa antes de confirmar.")
+                            INSERT INTO questoes (banca, cargo, materia, tema, enunciado, alternativas, gabarito, explicacao, tipo, fonte)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (banca_alvo, cargo_alvo, mat_final, tema_selecionado, enunciado, alternativas, gabarito, explicacao, "Inédita IA", f"Inédita ({banca_alvo})"))
+                            novas_ids.append(c.lastrowid)
+                        
+                        conn.commit()
+                        st.session_state.bateria_atual = novas_ids
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro na geração: {e}")
+            else:
+                # Busca questões reais já salvas no banco com filtro inteligente
+                st.info("Buscando questões do banco compatíveis com o seu perfil...")
+                c.execute("""
+                    SELECT id FROM questoes 
+                    WHERE (banca LIKE ? OR cargo LIKE ? OR materia LIKE ?)
+                    AND id NOT IN (SELECT questao_id FROM respostas WHERE usuario = ?)
+                    ORDER BY RANDOM() LIMIT ?
+                """, (f"%{banca_alvo}%", f"%{cargo_alvo}%", f"%{mat_selecionada}%", st.session_state.usuario_atual, qtd))
+                
+                encontradas = [row[0] for row in c.fetchall()]
+                if encontradas:
+                    st.session_state.bateria_atual = encontradas
+                    st.rerun()
+                else:
+                    st.warning("Não há questões suficientes no banco com esses parâmetros. Gere algumas inéditas primeiro!")
+
+    # --- RESOLUÇÃO ---
+    if st.session_state.bateria_atual:
+        st.write("---")
+        st.subheader("🎯 Caderno de Prova")
+        
+        df_respostas = pd.read_sql_query(f"SELECT questao_id, resposta_usuario, acertou FROM respostas WHERE usuario = '{st.session_state.usuario_atual}' AND questao_id IN ({','.join(map(str, st.session_state.bateria_atual))})", conn)
+        respondidas = df_respostas.set_index('questao_id').to_dict('index')
+
+        for i, q_id in enumerate(st.session_state.bateria_atual):
+            c.execute("SELECT banca, cargo, materia, enunciado, alternativas, gabarito, explicacao, fonte FROM questoes WHERE id = ?", (q_id,))
+            dados = c.fetchone()
+            
+            if dados:
+                q_banca, q_cargo, q_mat, q_enun, q_alt, q_gab, q_exp, q_fonte = dados
+                alts = json.loads(q_alt) if q_alt else {}
+                
+                with st.container(border=True):
+                    st.caption(f"**Item {i+1}** | {q_mat} | 🏢 {q_banca} | 💼 {q_cargo}")
+                    st.markdown(f"#### {q_enun}")
+                    
+                    opcoes = ["Selecionar..."] + ([f"{letra}) {texto}" for letra, texto in alts.items()] if alts else ["Certo", "Errado"])
+
+                    if q_id in respondidas:
+                        status = respondidas[q_id]
+                        if status['acertou'] == 1: st.success(f"✅ Marcado: **{status['resposta_usuario']}** (Correto)")
+                        else: st.error(f"❌ Marcado: **{status['resposta_usuario']}** (Incorreto)")
+                            
+                        st.info(f"**Gabarito:** {q_gab}")
+                        with st.expander("📖 Fundamentação Legal"): st.write(q_exp)
+                    else:
+                        st.write("")
+                        resp = st.radio("Sua Resposta:", opcoes, key=f"rad_{q_id}", label_visibility="collapsed")
+                        
+                        if st.button("Confirmar", key=f"btn_{q_id}"):
+                            if resp != "Selecionar...":
+                                letra = resp.split(")")[0].strip().upper() if alts else resp.strip().upper()
+                                gab = str(q_gab).strip().upper()
+                                acertou = 1 if letra in gab or gab in letra else 0
+                                
+                                c.execute("""
+                                INSERT INTO respostas (usuario, questao_id, resposta_usuario, acertou, data)
+                                VALUES (?, ?, ?, ?, ?)
+                                """, (st.session_state.usuario_atual, q_id, letra, acertou, str(datetime.now())))
+                                conn.commit()
+                                st.rerun()
+                            else:
+                                st.warning("Selecione uma opção.")
