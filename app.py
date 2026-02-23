@@ -8,7 +8,7 @@ from groq import Groq
 from duckduckgo_search import DDGS
 
 # ================= CONFIGURAÇÃO VISUAL =================
-st.set_page_config(page_title="Sistema de Estudos Avançado", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Plataforma de Alta Performance", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
     <style>
@@ -22,15 +22,23 @@ st.markdown("""
 # ================= CHAVE GROQ =================
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
-# ================= AGENTE DE BUSCA NA WEB =================
-def pesquisar_na_web(query):
-    """Realiza uma busca invisível na internet para trazer contexto atualizado (2024, 2025, 2026)."""
+# ================= AGENTE DE BUSCA DE DUPLA VERIFICAÇÃO =================
+def pesquisar_na_web(query_questao, query_edital):
+    """Realiza buscas simultâneas para garantir jurisprudência e rigor do edital."""
     try:
-        resultados = DDGS().text(query, max_results=5)
-        contexto = "\n".join([f"- {r['body']}" for r in resultados])
+        ddgs = DDGS()
+        # Busca 1: O tema ou a questão em si
+        res_questao = ddgs.text(query_questao, max_results=3)
+        # Busca 2: Dupla verificação do rigor da banca e cargo
+        res_edital = ddgs.text(query_edital, max_results=2)
+        
+        contexto = "--- DADOS DA QUESTÃO/JURISPRUDÊNCIA ---\n"
+        contexto += "\n".join([f"- {r['body']}" for r in res_questao])
+        contexto += "\n\n--- DUPLA VERIFICAÇÃO DE RIGOR DO EDITAL ---\n"
+        contexto += "\n".join([f"- {r['body']}" for r in res_edital])
         return contexto
     except Exception as e:
-        return "Sem resultados web no momento. Utilize o conhecimento da base jurídica."
+        return "Alerta: Busca web indisponível. Utilize o rigor máximo da base jurídica nativa."
 
 # ================= BANCO DE DADOS =================
 @st.cache_resource
@@ -119,12 +127,12 @@ with st.sidebar:
         st.write("---")
         with st.expander("➕ Cadastrar Novo Edital", expanded=True if df_editais.empty else False):
             nome_novo = st.text_input("Nome do Concurso (Ex: PCSP):")
-            banca_nova = st.text_input("Banca Examinadora (Ex: Vunesp, Consulplan):")
-            cargo_novo = st.text_input("Cargo (Ex: Delegado, Escrivão):")
+            banca_nova = st.text_input("Banca Examinadora (Ex: Vunesp, FGV):")
+            cargo_novo = st.text_input("Cargo (Ex: Delegado, Advogado):")
             texto_colado = st.text_area("Cole o texto do Conteúdo Programático aqui:")
 
             if st.button("Salvar Edital no Perfil", use_container_width=True) and nome_novo and texto_colado:
-                with st.spinner("Estruturando matérias..."):
+                with st.spinner("Estruturando matérias com precisão..."):
                     prompt = f"""
                     Leia o texto colado abaixo e liste APENAS os nomes das grandes áreas ou disciplinas.
                     Responda EXCLUSIVAMENTE em formato JSON:
@@ -191,7 +199,7 @@ else:
             with c1: mat_selecionada = st.selectbox("Escolha a Matéria", lista_materias)
             with c2: tema_selecionado = st.text_input("Tema específico (ou deixe Aleatório)", "Aleatório")
         else:
-            st.warning("Carregue um edital na barra lateral para focar a inteligência.")
+            st.warning("Carregue um edital na barra lateral para aplicar o filtro de rigor.")
             c1, c2, c3 = st.columns(3)
             with c1: banca_alvo = st.text_input("Banca", "Cebraspe")
             with c2: cargo_alvo = st.text_input("Cargo", "Geral")
@@ -201,12 +209,12 @@ else:
         c3, c4, c5 = st.columns([2, 2, 1])
         with c3: 
             tipo = st.selectbox("Origem do Material", [
-                "🧠 Inédita IA (Pesquisar Legislação Recente)", 
-                "🌐 Questões Reais (Vasculhar Web)",
+                "🧠 Inédita IA (Pesquisa Jurídica Dupla)", 
+                "🌐 Questões Reais (Busca Focada no Cargo)",
                 "📂 Revisão (Sortear banco local)"
             ])
         with c4:
-            formato_alvo = st.selectbox("Formato da Prova", [
+            formato_alvo = st.selectbox("Formato Exigido", [
                 "Múltipla Escolha (A a E)", 
                 "Múltipla Escolha (A a D)", 
                 "Certo / Errado"
@@ -219,7 +227,7 @@ else:
             instrucao_tema = f"Sorteie um tema de alta complexidade em {mat_final}" if tema_selecionado.lower() == "aleatório" else tema_selecionado
 
             if "Revisão" in tipo:
-                st.info("A resgatar histórico de erros e acertos...")
+                st.info("A resgatar histórico do seu banco local...")
                 c.execute("""
                     SELECT id FROM questoes 
                     WHERE (banca LIKE ? OR cargo LIKE ? OR materia LIKE ?)
@@ -230,46 +238,54 @@ else:
                     st.session_state.bateria_atual = encontradas
                     st.rerun()
                 else:
-                    st.warning("O banco interno ainda não tem questões suficientes. Gere Inéditas ou Reais primeiro!")
+                    st.warning("Banco local insuficiente. Gere material Inédito ou Real primeiro!")
 
             else:
-                with st.spinner(f"A ativar Agente Autônomo para varrer a internet e aplicar formato {formato_alvo}..."):
-                    if "Inédita" in tipo:
-                        termo_busca = f"jurisprudencia STF STJ lei atualizada 2024 2025 2026 {mat_final} {tema_selecionado}"
-                        instrucao_ia = f"Crie questões INÉDITAS baseadas nas inovações jurídicas e no contexto web fornecido. A abordagem deve ser no estilo da banca {banca_alvo}."
+                with st.spinner(f"Executando dupla verificação na Web para a banca {banca_alvo} e cargo {cargo_alvo}..."):
+                    
+                    # Definição das regras de JSON no prompt baseado no dropdown
+                    if formato_alvo == "Múltipla Escolha (A a E)":
+                        regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
+                    elif formato_alvo == "Múltipla Escolha (A a D)":
+                        regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."}'
                     else:
-                        termo_busca = f"questão de concurso {banca_alvo} {cargo_alvo} {mat_final} {tema_selecionado} 2022 2023 2024 2025"
-                        instrucao_ia = f"Sua missão é atuar como um buscador. Identifique no contexto web ou na sua memória questões REAIS que já foram cobradas pela banca {banca_alvo} para {cargo_alvo}. Não invente, traga a questão literal."
+                        regras_json_alt = '"alternativas": {} // DEVE SER EXATAMENTE UM DICIONÁRIO VAZIO'
 
-                    contexto_da_web = pesquisar_na_web(termo_busca)
+                    query_edital = f"edital concurso {banca_alvo} {cargo_alvo} nível de dificuldade estilo de prova"
+
+                    if "Inédita" in tipo:
+                        query_questao = f"jurisprudencia STF STJ lei atualizada 2025 2026 {mat_final} {tema_selecionado}"
+                        instrucao_ia = f"Sua missão é criar questões INÉDITAS. Utilize a dupla verificação fornecida para MIMETIZAR perfeitamente a linguagem, as pegadinhas e a profundidade da banca {banca_alvo} para o cargo de {cargo_alvo}."
+                    else:
+                        query_questao = f"questões de prova {banca_alvo} {cargo_alvo} {mat_final} {tema_selecionado} recentes"
+                        instrucao_ia = f"Sua missão prioritária e ABSOLUTA é encontrar e reproduzir questões REAIS aplicadas anteriormente pela banca {banca_alvo}, DANDO PREFERÊNCIA ABSOLUTA para provas do cargo de {cargo_alvo}. Não invente, traga a literalidade da prova."
+
+                    contexto_da_web = pesquisar_na_web(query_questao, query_edital)
 
                     prompt = f"""
-                    Atue como um examinador sênior de concursos de alto rendimento.
+                    Atue como o examinador oficial do concurso.
                     
-                    DADOS DA BUSCA EM TEMPO REAL:
+                    CONTEXTO DE DUPLA VERIFICAÇÃO (WEB):
                     {contexto_da_web}
                     
                     MISSÃO:
                     Gere exatamente {qtd} questão(ões).
-                    Cargo: {cargo_alvo} | Matéria: {mat_final} | Tema: {instrucao_tema}
+                    Cargo Alvo: {cargo_alvo} | Banca: {banca_alvo} | Matéria: {mat_final} | Tema: {instrucao_tema}
                     
-                    DIRETRIZES TÉCNICAS E JURÍDICAS:
+                    DIRETRIZES TÉCNICAS INEGOCIÁVEIS:
                     1. {instrucao_ia}
-                    2. FORMATO OBRIGATÓRIO: A prova será no formato '{formato_alvo}'. 
-                       - Se for "Múltipla Escolha (A a E)", crie exatamente 5 alternativas (A, B, C, D, E) no campo 'alternativas'.
-                       - Se for "Múltipla Escolha (A a D)", crie exatamente 4 alternativas (A, B, C, D) no campo 'alternativas'.
-                       - Se for "Certo / Errado", crie uma afirmativa única para julgamento e deixe o objeto 'alternativas' VAZIO {{}}.
-                    3. RIGOR BRASILEIRO: O gabarito e a explicação DEVEM respeitar estritamente a legislação brasileira vigente e as normas brasileiras. Jamais invente jurisprudência.
-                    4. FONTE OBRIGATÓRIA: O campo "fonte" é sagrado. Preencha SEMPRE com o formato: "[Banca] - [Ano] - [Órgão/Cargo]".
+                    2. FORMATO IMPERATIVO: Você DEVE respeitar o formato '{formato_alvo}'. JAMAIS crie alternativas se o formato for Certo/Errado. JAMAIS crie a alternativa E se o formato for A a D.
+                    3. RIGOR JURÍDICO BRASILEIRO: O gabarito DEVE estar rigorosamente fundamentado na legislação e nas normas brasileiras vigentes. É expressamente proibido inventar jurisprudência.
+                    4. FONTE: Preencha SEMPRE com "[Banca] - [Ano] - [Órgão/Cargo]".
                     
                     Responda em JSON, EXATAMENTE assim:
                     {{
                       "questoes": [
                         {{
                           "enunciado": "Texto da questão",
-                          "alternativas": {{"A": "...", "B": "...", "C": "..."}}, // Vazio se Certo/Errado
+                          {regras_json_alt},
                           "gabarito": "Letra correta ou Certo/Errado",
-                          "explicacao": "Fundamentação jurídica detalhada indicando a norma/lei.",
+                          "explicacao": "Fundamentação legal clara e responsável.",
                           "fonte": "[Banca] - [Ano] - [Cargo/Órgão]"
                         }}
                       ]
@@ -277,10 +293,11 @@ else:
                     """
 
                     try:
+                        # Temperature 0.1 garante que a IA não invente formatos fora do exigido
                         resposta = client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
                             model="llama-3.3-70b-versatile",
-                            temperature=0.2,
+                            temperature=0.1,
                             response_format={"type": "json_object"}
                         )
                         
@@ -293,8 +310,16 @@ else:
                             enunciado = dados.get("enunciado", "N/A")
                             gabarito = dados.get("gabarito", "N/A")
                             explicacao = dados.get("explicacao", "N/A")
-                            fonte = dados.get("fonte", f"{banca_alvo} - Ano Recente - {cargo_alvo}")
-                            alternativas = json.dumps(dados.get("alternativas", {}))
+                            fonte = dados.get("fonte", f"{banca_alvo} - {cargo_alvo}")
+                            
+                            # BLINDAGEM PYTHON: Força a correção do formato caso a IA erre
+                            alts_dict = dados.get("alternativas", {})
+                            if "Certo" in formato_alvo:
+                                alts_dict = {} # Expurga qualquer alternativa criada indevidamente
+                            elif "A a D" in formato_alvo:
+                                alts_dict = {k: v for k, v in alts_dict.items() if k in ["A", "B", "C", "D"]}
+                                
+                            alternativas = json.dumps(alts_dict)
 
                             c.execute("""
                             INSERT INTO questoes (banca, cargo, materia, tema, enunciado, alternativas, gabarito, explicacao, tipo, fonte)
