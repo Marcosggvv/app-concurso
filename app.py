@@ -93,12 +93,11 @@ with st.sidebar:
                 if inicio == -1:
                     inicio = texto_upper.rfind("OBJETOS DE AVALIAÇÃO")
                 if inicio == -1:
-                    inicio = max(0, len(texto) - 35000) 
+                    inicio = max(0, len(texto) - 20000) 
                 
-                # Leitura ampla, pois a saída será curta
-                texto_reduzido = texto[inicio : inicio + 35000]
+                # RECORTE SEGURO: 20.000 caracteres garantem cerca de 7.000 tokens (bem abaixo dos 12.000)
+                texto_reduzido = texto[inicio : inicio + 20000]
 
-                # NOVO PROMPT: Opção 2 (Extração Parcial de Matérias)
                 prompt = f"""
                 Você é um especialista em análise de editais de concurso.
                 Leia o recorte do edital abaixo e extraia a Banca Examinadora e TODOS OS CARGOS com as suas respetivas DISCIPLINAS (Matérias).
@@ -185,7 +184,6 @@ with st.container(border=True):
         lista_cargos = list(st.session_state.dados_edital["cargos"].keys())
         cargo_selecionado = st.selectbox("1. Selecione o Cargo Foco", lista_cargos)
         
-        # Na opção 2, o dicionário de disciplinas é apenas uma lista de strings
         lista_materias_edital = st.session_state.dados_edital["cargos"][cargo_selecionado]
         lista_materias = ["Aleatório"] + lista_materias_edital
         
@@ -193,7 +191,6 @@ with st.container(border=True):
         with c1:
             materia_selecionada = st.selectbox("2. Escolha a Matéria", lista_materias)
         with c2:
-            # O tema volta a ser texto livre para evitar sobrecarga de leitura no PDF
             tema_selecionado = st.text_input("3. Especifique um Tema (ou deixe Aleatório)", "Aleatório")
             
     else:
@@ -218,8 +215,6 @@ with st.container(border=True):
                     mat_final = random.choice(lista_materias_edital)
 
             fator_aleatorio = random.randint(10000, 99999)
-            
-            # Instrução caso o tema seja aleatório
             instrucao_tema = f"Sorteie um tema de elevada complexidade dentro da matéria de {mat_final}" if tem_final.lower() == "aleatório" else tem_final
 
             prompt = f"""
