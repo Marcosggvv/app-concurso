@@ -27,14 +27,12 @@ def pesquisar_na_web(query_questao, query_edital):
     """Realiza buscas simultâneas para garantir jurisprudência e rigor do edital."""
     try:
         ddgs = DDGS()
-        # Busca 1: O tema ou a questão em si
-        res_questao = ddgs.text(query_questao, max_results=3)
-        # Busca 2: Dupla verificação do rigor da banca e cargo
+        res_questao = ddgs.text(query_questao, max_results=4)
         res_edital = ddgs.text(query_edital, max_results=2)
         
-        contexto = "--- DADOS DA QUESTÃO/JURISPRUDÊNCIA ---\n"
+        contexto = "--- DADOS DA QUESTÃO/JURISPRUDÊNCIA/PROVA REAL ---\n"
         contexto += "\n".join([f"- {r['body']}" for r in res_questao])
-        contexto += "\n\n--- DUPLA VERIFICAÇÃO DE RIGOR DO EDITAL ---\n"
+        contexto += "\n\n--- NÍVEL DE RIGOR DO EDITAL/CARGO ---\n"
         contexto += "\n".join([f"- {r['body']}" for r in res_edital])
         return contexto
     except Exception as e:
@@ -210,11 +208,11 @@ else:
         with c3: 
             tipo = st.selectbox("Origem do Material", [
                 "🧠 Inédita IA (Pesquisa Jurídica Dupla)", 
-                "🌐 Questões Reais (Busca Focada no Cargo)",
+                "🌐 Questões Reais (Transcrição Literal Fiel)",
                 "📂 Revisão (Sortear banco local)"
             ])
         with c4:
-            formato_alvo = st.selectbox("Formato Exigido", [
+            formato_alvo = st.selectbox("Formato (Para Inéditas)", [
                 "Múltipla Escolha (A a E)", 
                 "Múltipla Escolha (A a D)", 
                 "Certo / Errado"
@@ -241,31 +239,37 @@ else:
                     st.warning("Banco local insuficiente. Gere material Inédito ou Real primeiro!")
 
             else:
-                with st.spinner(f"Executando dupla verificação na Web para a banca {banca_alvo} e cargo {cargo_alvo}..."):
+                with st.spinner(f"Executando operação tática na Web para a banca {banca_alvo} e cargo {cargo_alvo}..."):
                     
-                    # Definição das regras de JSON no prompt baseado no dropdown
-                    if formato_alvo == "Múltipla Escolha (A a E)":
-                        regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
-                    elif formato_alvo == "Múltipla Escolha (A a D)":
-                        regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."}'
-                    else:
-                        regras_json_alt = '"alternativas": {} // DEVE SER EXATAMENTE UM DICIONÁRIO VAZIO'
-
                     query_edital = f"edital concurso {banca_alvo} {cargo_alvo} nível de dificuldade estilo de prova"
 
                     if "Inédita" in tipo:
                         query_questao = f"jurisprudencia STF STJ lei atualizada 2025 2026 {mat_final} {tema_selecionado}"
                         instrucao_ia = f"Sua missão é criar questões INÉDITAS. Utilize a dupla verificação fornecida para MIMETIZAR perfeitamente a linguagem, as pegadinhas e a profundidade da banca {banca_alvo} para o cargo de {cargo_alvo}."
+                        
+                        # Regra de formato estrita apenas para inéditas
+                        if formato_alvo == "Múltipla Escolha (A a E)":
+                            regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
+                        elif formato_alvo == "Múltipla Escolha (A a D)":
+                            regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."}'
+                        else:
+                            regras_json_alt = '"alternativas": {} // DEVE SER EXATAMENTE UM DICIONÁRIO VAZIO'
+                            
+                        instrucao_formato = f"FORMATO IMPERATIVO: Você DEVE respeitar o formato '{formato_alvo}'. JAMAIS crie alternativas se for Certo/Errado."
                     else:
-                        query_questao = f"questões de prova {banca_alvo} {cargo_alvo} {mat_final} {tema_selecionado} recentes"
-                        instrucao_ia = f"Sua missão prioritária e ABSOLUTA é encontrar e reproduzir questões REAIS aplicadas anteriormente pela banca {banca_alvo}, DANDO PREFERÊNCIA ABSOLUTA para provas do cargo de {cargo_alvo}. Não invente, traga a literalidade da prova."
+                        query_questao = f"questões de concurso prova {banca_alvo} {cargo_alvo} {mat_final} {tema_selecionado} nível avançado difíceis"
+                        instrucao_ia = f"Sua missão prioritária e ABSOLUTA é encontrar e TRANSCREVER DE FORMA LITERAL E FIEL questões REAIS já aplicadas pela banca {banca_alvo} para o cargo de {cargo_alvo}. É expressamente PROIBIDO adaptar, facilitar ou modificar o enunciado e as alternativas. Mantenha o nível de dificuldade jurídico extremo original."
+                        
+                        # Permite qualquer formato que venha da questão original
+                        regras_json_alt = '"alternativas": {"A": "...", "B": "..."} // Copie as alternativas EXATAMENTE como na prova original, ou deixe vazio se a original for Certo/Errado.'
+                        instrucao_formato = "FORMATO ORIGINAL: Você DEVE IGNORAR o formato exigido pelo usuário e MANTER o formato original da prova (se a prova real for A a E, use A a E; se for Certo/Errado, use Certo/Errado). A literalidade da questão real prevalece."
 
                     contexto_da_web = pesquisar_na_web(query_questao, query_edital)
 
                     prompt = f"""
                     Atue como o examinador oficial do concurso.
                     
-                    CONTEXTO DE DUPLA VERIFICAÇÃO (WEB):
+                    CONTEXTO DE DUPLA VERIFICAÇÃO (WEB E MEMÓRIA):
                     {contexto_da_web}
                     
                     MISSÃO:
@@ -274,7 +278,7 @@ else:
                     
                     DIRETRIZES TÉCNICAS INEGOCIÁVEIS:
                     1. {instrucao_ia}
-                    2. FORMATO IMPERATIVO: Você DEVE respeitar o formato '{formato_alvo}'. JAMAIS crie alternativas se o formato for Certo/Errado. JAMAIS crie a alternativa E se o formato for A a D.
+                    2. {instrucao_formato}
                     3. RIGOR JURÍDICO BRASILEIRO: O gabarito DEVE estar rigorosamente fundamentado na legislação e nas normas brasileiras vigentes. É expressamente proibido inventar jurisprudência.
                     4. FONTE: Preencha SEMPRE com "[Banca] - [Ano] - [Órgão/Cargo]".
                     
@@ -293,7 +297,6 @@ else:
                     """
 
                     try:
-                        # Temperature 0.1 garante que a IA não invente formatos fora do exigido
                         resposta = client.chat.completions.create(
                             messages=[{"role": "user", "content": prompt}],
                             model="llama-3.3-70b-versatile",
@@ -311,14 +314,16 @@ else:
                             gabarito = dados.get("gabarito", "N/A")
                             explicacao = dados.get("explicacao", "N/A")
                             fonte = dados.get("fonte", f"{banca_alvo} - {cargo_alvo}")
-                            
-                            # BLINDAGEM PYTHON: Força a correção do formato caso a IA erre
                             alts_dict = dados.get("alternativas", {})
-                            if "Certo" in formato_alvo:
-                                alts_dict = {} # Expurga qualquer alternativa criada indevidamente
-                            elif "A a D" in formato_alvo:
-                                alts_dict = {k: v for k, v in alts_dict.items() if k in ["A", "B", "C", "D"]}
-                                
+                            
+                            # BLINDAGEM PYTHON: Aplica a forçação de formato APENAS para questões INÉDITAS.
+                            # Para questões REAIS, mantemos rigorosamente as alternativas originais extraídas.
+                            if "Inédita" in tipo:
+                                if "Certo" in formato_alvo:
+                                    alts_dict = {} 
+                                elif "A a D" in formato_alvo:
+                                    alts_dict = {k: v for k, v in alts_dict.items() if k in ["A", "B", "C", "D"]}
+                                    
                             alternativas = json.dumps(alts_dict)
 
                             c.execute("""
