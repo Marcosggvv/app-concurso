@@ -77,7 +77,7 @@ with st.sidebar:
 
     if edital:
         if st.button("Estruturar Edital", use_container_width=True):
-            with st.spinner("Rastreando conteúdo programático com Radar de Precisão..."):
+            with st.spinner("Rastreando cargos e matérias de forma otimizada..."):
                 with pdfplumber.open(edital) as pdf:
                     texto = ""
                     for pagina in pdf.pages:
@@ -93,25 +93,24 @@ with st.sidebar:
                 if inicio == -1:
                     inicio = texto_upper.rfind("OBJETOS DE AVALIAÇÃO")
                 if inicio == -1:
-                    inicio = max(0, len(texto) - 25000) # Fallback seguro
+                    inicio = max(0, len(texto) - 35000) 
                 
-                # Captura 25.000 caracteres para respeitar o limite exato de 12k tokens da Groq
-                texto_reduzido = texto[inicio : inicio + 25000]
+                # Leitura ampla, pois a saída será curta
+                texto_reduzido = texto[inicio : inicio + 35000]
 
+                # NOVO PROMPT: Opção 2 (Extração Parcial de Matérias)
                 prompt = f"""
                 Você é um especialista em análise de editais de concurso.
-                Leia o recorte do edital abaixo e extraia a Banca Examinadora e TODOS OS CARGOS com seus respectivos Conteúdos Programáticos.
+                Leia o recorte do edital abaixo e extraia a Banca Examinadora e TODOS OS CARGOS com as suas respetivas DISCIPLINAS (Matérias).
                 
-                REGRA ABSOLUTA: Faça uma varredura EXAUSTIVA. É expressamente PROIBIDO resumir ou omitir matérias e temas. Capture tudo.
+                REGRA ABSOLUTA: NÃO extraia os subtópicos ou temas de cada matéria. Quero APENAS o nome do cargo e a lista simples das matérias cobradas.
                 
                 Responda EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
                 {{
                   "banca": "Nome da Banca",
                   "cargos": {{
-                    "Nome do Cargo 1": {{
-                      "Disciplina 1": ["Tópico 1", "Tópico 2"],
-                      "Disciplina 2": ["Tópico 1"]
-                    }}
+                    "Nome do Cargo 1": ["Matéria 1", "Matéria 2", "Matéria 3"],
+                    "Nome do Cargo 2": ["Matéria 1", "Matéria 2"]
                   }}
                 }}
                 
@@ -121,7 +120,7 @@ with st.sidebar:
                 try:
                     resposta = client.chat.completions.create(
                         messages=[
-                            {"role": "system", "content": "Você responde estritamente em formato JSON válido e não omite informações."},
+                            {"role": "system", "content": "Você responde estritamente em formato JSON válido e extrai apenas a lista de matérias."},
                             {"role": "user", "content": prompt}
                         ],
                         model="llama-3.3-70b-versatile",
@@ -132,7 +131,7 @@ with st.sidebar:
                     texto_json = resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                     dados = json.loads(texto_json)
                     st.session_state.dados_edital = dados
-                    st.success("Cargos e matérias estruturados com precisão absoluta!")
+                    st.success("Matérias e cargos extraídos com máxima eficiência!")
                 except Exception as e:
                     st.error(f"Erro ao analisar o edital: {e}")
 
@@ -148,7 +147,7 @@ with st.sidebar:
     st.divider()
     st.markdown("### 👨‍💻 Desenvolvedor")
     st.caption("Criado e projetado por **Marcos Gonçalves Versiane**.")
-    st.markdown("🌐 [Acessar marcosversiane.com](https://marcosversiane.com)")
+    st.markdown("🌐 [Aceder a marcosversiane.com](https://marcosversiane.com)")
 
 # ================= PAINEL ÚNICO PRINCIPAL =================
 st.title("📚 Plataforma Integrada de Resolução")
@@ -186,18 +185,19 @@ with st.container(border=True):
         lista_cargos = list(st.session_state.dados_edital["cargos"].keys())
         cargo_selecionado = st.selectbox("1. Selecione o Cargo Foco", lista_cargos)
         
-        disciplinas_dict = st.session_state.dados_edital["cargos"][cargo_selecionado]
-        lista_materias = ["Aleatório"] + list(disciplinas_dict.keys())
+        # Na opção 2, o dicionário de disciplinas é apenas uma lista de strings
+        lista_materias_edital = st.session_state.dados_edital["cargos"][cargo_selecionado]
+        lista_materias = ["Aleatório"] + lista_materias_edital
         
         c1, c2 = st.columns(2)
         with c1:
             materia_selecionada = st.selectbox("2. Escolha a Matéria", lista_materias)
         with c2:
-            lista_temas = ["Aleatório"] + (disciplinas_dict[materia_selecionada] if materia_selecionada != "Aleatório" else [])
-            tema_selecionado = st.selectbox("3. Escolha o Tema", lista_temas)
+            # O tema volta a ser texto livre para evitar sobrecarga de leitura no PDF
+            tema_selecionado = st.text_input("3. Especifique um Tema (ou deixe Aleatório)", "Aleatório")
             
     else:
-        st.warning("Nenhum edital com estrutura de cargos foi carregado. Faça o upload ou use o modo manual abaixo.")
+        st.warning("Nenhum edital estruturado foi carregado. Faça o upload ou use o modo manual abaixo.")
         c1, c2 = st.columns(2)
         with c1: materia_selecionada = st.text_input("Matéria (ex: Direito Penal)", "Aleatório")
         with c2: tema_selecionado = st.text_input("Tema (ex: Inquérito Policial)", "Aleatório")
@@ -209,21 +209,18 @@ with st.container(border=True):
         quantidade = st.slider("Quantidade de Questões", 1, 10, 5)
 
     if st.button("Gerar Material e Iniciar Resolução", type="primary", use_container_width=True):
-        with st.spinner(f"Moldando {quantidade} questão(ões) para o cargo de {cargo_selecionado}..."):
+        with st.spinner(f"A moldar {quantidade} questão(ões) para o cargo de {cargo_selecionado}..."):
             mat_final = materia_selecionada
             tem_final = tema_selecionado
             
             if st.session_state.dados_edital and "cargos" in st.session_state.dados_edital:
                 if mat_final == "Aleatório":
-                    mat_final = random.choice(list(disciplinas_dict.keys()))
-                    tem_final = random.choice(disciplinas_dict[mat_final])
-                elif tem_final == "Aleatório":
-                    tem_final = random.choice(disciplinas_dict[mat_final])
-            else:
-                if mat_final == "Aleatório": mat_final = "Direito Constitucional"
-                if tem_final == "Aleatório": tem_final = "Direitos Fundamentais"
+                    mat_final = random.choice(lista_materias_edital)
 
             fator_aleatorio = random.randint(10000, 99999)
+            
+            # Instrução caso o tema seja aleatório
+            instrucao_tema = f"Sorteie um tema de elevada complexidade dentro da matéria de {mat_final}" if tem_final.lower() == "aleatório" else tem_final
 
             prompt = f"""
             Aja como um examinador de concursos públicos do Brasil.
@@ -231,14 +228,14 @@ with st.container(border=True):
             Banca: {banca_edital}
             Cargo Avaliado: {cargo_selecionado}
             Matéria: {mat_final}
-            Tema: {tem_final}
+            Tema: {instrucao_tema}
             Diretriz: {tipo}
             Exclusividade: {fator_aleatorio}
             
             REGRAS ABSOLUTAS:
-            1. Fundamente a explicação ESTRITAMENTE na legislação brasileira vigente e na jurisprudência.
-            2. Nível de dificuldade compatível com o cargo de {cargo_selecionado}.
-            3. MIMETIZE A BANCA: Se a banca {banca_edital} cobra Múltipla Escolha (A, B, C, D, E), crie obrigatoriamente alternativas. Se a banca cobra Certo/Errado (ex: Cebraspe, Quadrix), faça afirmativas simples para julgamento.
+            1. Fundamente a explicação ESTRITAMENTE na legislação brasileira vigente e nas normas brasileiras em geral. Jamais invente jurisprudência ou algo do tipo. Seja assertivo e responsável.
+            2. Nível de dificuldade compatível com as exigências para o cargo de {cargo_selecionado}.
+            3. MIMETIZE A BANCA: Se a banca {banca_edital} cobra Múltipla Escolha (A, B, C, D, E), crie obrigatoriamente alternativas. Se a banca cobra Certo/Errado (ex: Cebraspe), faça afirmativas simples.
             
             Responda EXCLUSIVAMENTE em formato JSON, utilizando EXATAMENTE a seguinte estrutura:
             {{
@@ -247,9 +244,9 @@ with st.container(border=True):
                   "enunciado": "O texto da questão ou afirmativa",
                   "alternativas": {{
                     "A": "texto", "B": "texto", "C": "texto", "D": "texto", "E": "texto"
-                  }}, // Deixe vazio {{}} SE for banca de Certo/Errado. Preencha apenas se for Múltipla Escolha.
+                  }}, // Deixe vazio {{}} SE for banca de Certo/Errado.
                   "gabarito": "Indique a Letra correta ou escreva Certo ou Errado",
-                  "explicacao": "Explicação completa e assertiva com o respectivo fundamento legal brasileiro vigente.",
+                  "explicacao": "Explicação completa, assertiva e alicerçada nas normas brasileiras.",
                   "fonte": "Indique o Ano/Órgão ou Inédita IA"
                 }}
               ]
@@ -259,7 +256,7 @@ with st.container(border=True):
             try:
                 resposta = client.chat.completions.create(
                     messages=[
-                        {"role": "system", "content": "Você responde estritamente em formato JSON válido."},
+                        {"role": "system", "content": "Você responde estritamente em formato JSON válido, respeitando o ordenamento jurídico brasileiro."},
                         {"role": "user", "content": prompt}
                     ],
                     model="llama-3.3-70b-versatile",
@@ -314,7 +311,7 @@ if st.session_state.bateria_atual:
             alternativas_dict = json.loads(alt_json_q) if alt_json_q else {}
             
             with st.container(border=True):
-                st.caption(f"**Questão {index + 1}** | 📚 {mat_q} - {tema_q} | 💼 {cargo_q} | 🏷️ {fonte_q}")
+                st.caption(f"**Questão {index + 1}** | 📚 {mat_q} | 💼 {cargo_q} | 🏷️ {fonte_q}")
                 st.markdown(f"#### {enun_q}")
                 
                 is_multipla = len(alternativas_dict) > 0
