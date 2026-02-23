@@ -119,7 +119,7 @@ with st.sidebar:
         st.write("---")
         with st.expander("➕ Cadastrar Novo Edital", expanded=True if df_editais.empty else False):
             nome_novo = st.text_input("Nome do Concurso (Ex: PCSP):")
-            banca_nova = st.text_input("Banca Examinadora (Ex: Vunesp, Cebraspe):")
+            banca_nova = st.text_input("Banca Examinadora (Ex: Vunesp, Consulplan):")
             cargo_novo = st.text_input("Cargo (Ex: Delegado, Escrivão):")
             texto_colado = st.text_area("Cole o texto do Conteúdo Programático aqui:")
 
@@ -198,13 +198,21 @@ else:
             with c3: mat_selecionada = st.text_input("Matéria", "Direito Constitucional")
             tema_selecionado = st.text_input("Tema específico", "Aleatório")
 
-        c3, c4 = st.columns([2, 1])
-        with c3: tipo = st.selectbox("Origem do Material", [
-            "🧠 Inédita IA (Pesquisar Legislação/Jurisprudência Recente)", 
-            "🌐 Questões Reais (Vasculhar Provas Anteriores na Web)",
-            "📂 Revisão (Sortear apenas questões já feitas no App)"
-        ])
-        with c4: qtd = st.slider("Quantidade", 1, 10, 5)
+        c3, c4, c5 = st.columns([2, 2, 1])
+        with c3: 
+            tipo = st.selectbox("Origem do Material", [
+                "🧠 Inédita IA (Pesquisar Legislação Recente)", 
+                "🌐 Questões Reais (Vasculhar Web)",
+                "📂 Revisão (Sortear banco local)"
+            ])
+        with c4:
+            formato_alvo = st.selectbox("Formato da Prova", [
+                "Múltipla Escolha (A a E)", 
+                "Múltipla Escolha (A a D)", 
+                "Certo / Errado"
+            ])
+        with c5: 
+            qtd = st.slider("Quantidade", 1, 10, 5)
 
         if st.button("Forjar Simulado", type="primary", use_container_width=True):
             mat_final = random.choice(e['materias']) if mat_selecionada == "Aleatório" and st.session_state.edital_ativo else mat_selecionada
@@ -222,24 +230,23 @@ else:
                     st.session_state.bateria_atual = encontradas
                     st.rerun()
                 else:
-                    st.warning("O seu banco interno ainda não tem questões suficientes. Gere Inéditas ou Reais da Web primeiro!")
+                    st.warning("O banco interno ainda não tem questões suficientes. Gere Inéditas ou Reais primeiro!")
 
             else:
-                with st.spinner(f"A ativar Agente Autônomo para varrer a internet (Buscando dados recentes para {qtd} itens)..."):
-                    # O Agente pesquisa na Web antes de falar com a IA
+                with st.spinner(f"A ativar Agente Autônomo para varrer a internet e aplicar formato {formato_alvo}..."):
                     if "Inédita" in tipo:
                         termo_busca = f"jurisprudencia STF STJ lei atualizada 2024 2025 2026 {mat_final} {tema_selecionado}"
-                        instrucao_ia = f"Crie questões INÉDITAS baseadas nas inovações jurídicas e no contexto web fornecido. Mimetize a banca {banca_alvo}."
+                        instrucao_ia = f"Crie questões INÉDITAS baseadas nas inovações jurídicas e no contexto web fornecido. A abordagem deve ser no estilo da banca {banca_alvo}."
                     else:
                         termo_busca = f"questão de concurso {banca_alvo} {cargo_alvo} {mat_final} {tema_selecionado} 2022 2023 2024 2025"
-                        instrucao_ia = f"Sua missão é atuar como um buscador de arquivos. Identifique no contexto web fornecido ou na sua memória questões REAIS que já foram cobradas em provas pela banca {banca_alvo} para {cargo_alvo}. Não invente, traga a questão literal."
+                        instrucao_ia = f"Sua missão é atuar como um buscador. Identifique no contexto web ou na sua memória questões REAIS que já foram cobradas pela banca {banca_alvo} para {cargo_alvo}. Não invente, traga a questão literal."
 
                     contexto_da_web = pesquisar_na_web(termo_busca)
 
                     prompt = f"""
                     Atue como um examinador sênior de concursos de alto rendimento.
                     
-                    DADOS DA BUSCA EM TEMPO REAL (INTERNET ATUAL):
+                    DADOS DA BUSCA EM TEMPO REAL:
                     {contexto_da_web}
                     
                     MISSÃO:
@@ -248,16 +255,19 @@ else:
                     
                     DIRETRIZES TÉCNICAS E JURÍDICAS:
                     1. {instrucao_ia}
-                    2. ESTILO DA BANCA: Se a banca {banca_alvo} cobra Certo/Errado (ex: Cebraspe), faça afirmativas (alternativas vazias). Se for múltipla escolha (ex: FGV, Vunesp), crie A, B, C, D e E.
-                    3. RIGOR BRASILEIRO: O gabarito DEVE respeitar estritamente o ordenamento jurídico brasileiro atualizado.
-                    4. FONTE OBRIGATÓRIA: O campo "fonte" é sagrado. Preencha SEMPRE com o formato: "Nome da Banca - Ano - Órgão - Cargo". Ex: "Cebraspe - 2024 - Polícia Federal - Delegado". Se for Inédita, escreva "Inédita IA - Estilo [Banca] - [Ano]".
+                    2. FORMATO OBRIGATÓRIO: A prova será no formato '{formato_alvo}'. 
+                       - Se for "Múltipla Escolha (A a E)", crie exatamente 5 alternativas (A, B, C, D, E) no campo 'alternativas'.
+                       - Se for "Múltipla Escolha (A a D)", crie exatamente 4 alternativas (A, B, C, D) no campo 'alternativas'.
+                       - Se for "Certo / Errado", crie uma afirmativa única para julgamento e deixe o objeto 'alternativas' VAZIO {{}}.
+                    3. RIGOR BRASILEIRO: O gabarito e a explicação DEVEM respeitar estritamente a legislação brasileira vigente e as normas brasileiras. Jamais invente jurisprudência.
+                    4. FONTE OBRIGATÓRIA: O campo "fonte" é sagrado. Preencha SEMPRE com o formato: "[Banca] - [Ano] - [Órgão/Cargo]".
                     
                     Responda em JSON, EXATAMENTE assim:
                     {{
                       "questoes": [
                         {{
                           "enunciado": "Texto da questão",
-                          "alternativas": {{"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}}, // Vazio se Certo/Errado
+                          "alternativas": {{"A": "...", "B": "...", "C": "..."}}, // Vazio se Certo/Errado
                           "gabarito": "Letra correta ou Certo/Errado",
                           "explicacao": "Fundamentação jurídica detalhada indicando a norma/lei.",
                           "fonte": "[Banca] - [Ano] - [Cargo/Órgão]"
