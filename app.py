@@ -155,7 +155,6 @@ except Exception as e:
 
 # ================= AGENTE DE BUSCA AVANÇADO =================
 def pesquisar_questoes_reais_banca(banca, cargo, materia, tema, quantidade):
-    """Busca APENAS questões reais de provas anteriores."""
     try:
         ddgs = DDGS()
         queries = [
@@ -184,7 +183,6 @@ def pesquisar_questoes_reais_banca(banca, cargo, materia, tema, quantidade):
         return "Busca de questões reais indisponível."
 
 def pesquisar_jurisprudencia_banca(banca, cargo, materia):
-    """Busca jurisprudência específica da banca."""
     try:
         ddgs = DDGS()
         query = f'jurisprudência "{banca}" "{cargo}" "{materia}" STF STJ (site:stf.jus.br OR site:stj.jus.br OR site:tecconcursos.com.br)'
@@ -195,7 +193,6 @@ def pesquisar_jurisprudencia_banca(banca, cargo, materia):
         return "Busca de jurisprudência indisponível."
 
 def pesquisar_estilo_questoes_banca(banca):
-    """Busca exemplos do estilo específico da banca."""
     try:
         ddgs = DDGS()
         query = f'"{banca}" questões tipo estilo formato padrão (site:tecconcursos.com.br OR site:qconcursos.com OR site:youtube.com)'
@@ -298,49 +295,39 @@ def questao_ja_existe(enunciado, gabarito):
     c.execute("SELECT id FROM questoes WHERE hash_questao = ?", (hash_q,))
     return c.fetchone() is not None
 
-# ================= CORREÇÃO: NORMALIZAÇÃO DO GABARITO =================
+# ================= CORREÇÃO DEFINITIVA: NORMALIZAÇÃO DE GABARITOS (REGEX) =================
 def normalizar_gabarito(gabarito_raw):
     """
-    Normaliza o gabarito para um formato único e confiável.
-    Converte: 'A)', 'Letra A', 'A - texto', 'a', 'certo', 'ERRADO', etc.
-    Retorna sempre: 'A', 'B', 'C', 'D', 'E', 'CERTO' ou 'ERRADO'
+    Usa Regex para extrair puramente a letra (A, B, C, D, E) ou a palavra CERTO/ERRADO.
+    Limpa completamente sujeiras como "Letra A", "A)", "A - correta", etc.
     """
     if not gabarito_raw:
         return ""
 
     g = str(gabarito_raw).strip().upper()
 
-    # Verifica Certo/Errado por extenso antes de qualquer coisa
+    # Tratamento para Certo/Errado (prioritário)
     if "CERTO" in g and "ERRADO" not in g:
         return "CERTO"
     if "ERRADO" in g:
         return "ERRADO"
 
-    # Extrai a primeira letra válida A-E no início da string (ex: "A)", "A -", "A.")
-    match = re.match(r'^([A-E])\b', g)
+    # Busca a primeira ocorrência isolada de A, B, C, D ou E no texto
+    match = re.search(r'\b([A-E])\b', g.replace(")", " ").replace("-", " "))
     if match:
         return match.group(1)
 
-    # Tenta encontrar padrão "LETRA A", "ALT A", "ALTERNATIVA A"
-    match = re.search(r'(?:LETRA|ALT(?:ERNATIVA)?)\s+([A-E])\b', g)
-    if match:
-        return match.group(1)
+    # Fallback se a regex falhar (retorna a primeira letra da string caso seja A-E)
+    for char in g:
+        if char in "ABCDE":
+            return char
 
-    # Última tentativa: primeira letra A-E isolada em qualquer parte
-    match = re.search(r'\b([A-E])\b', g)
-    if match:
-        return match.group(1)
-
-    # Fallback: retorna o valor original limpo
     return g
-
 
 def extrair_letra_opcao(opcao_texto, tem_alternativas):
     """
-    Extrai a letra de uma opção exibida na tela.
-    Ex: 'A) texto da alternativa' -> 'A'
-    Ex: 'Certo' -> 'CERTO'
-    Ex: 'Errado' -> 'ERRADO'
+    Extrai a letra A, B, C, D, E da alternativa renderizada na tela.
+    Exemplo: Recebe 'A) Constituição Federal' e retorna 'A'.
     """
     texto = str(opcao_texto).strip().upper()
 
@@ -348,12 +335,8 @@ def extrair_letra_opcao(opcao_texto, tem_alternativas):
         return texto
 
     if tem_alternativas:
-        # Formato esperado: "A) texto..."
-        match = re.match(r'^([A-E])\)', texto)
-        if match:
-            return match.group(1)
-        # Fallback: primeira letra
-        match = re.match(r'^([A-E])', texto)
+        # Pega sempre a primeira letra que for A, B, C, D ou E na string
+        match = re.search(r'([A-E])', texto)
         if match:
             return match.group(1)
 
@@ -706,7 +689,7 @@ else:
 
                             for dados in lista_questoes:
                                 enunciado = dados.get("enunciado", "N/A")
-                                # ✅ CORREÇÃO: normaliza o gabarito ao salvar
+                                # SALVA NO BANCO JÁ NORMALIZADO PELA REGEX
                                 gabarito = normalizar_gabarito(dados.get("gabarito", "N/A"))
 
                                 if questao_ja_existe(enunciado, gabarito):
@@ -785,7 +768,7 @@ else:
 
                             for dados in lista_questoes:
                                 enunciado = dados.get("enunciado", "N/A")
-                                # ✅ CORREÇÃO: normaliza o gabarito ao salvar
+                                # SALVA NO BANCO JÁ NORMALIZADO PELA REGEX
                                 gabarito = normalizar_gabarito(dados.get("gabarito", "N/A"))
 
                                 if questao_ja_existe(enunciado, gabarito):
@@ -848,7 +831,7 @@ else:
                 alts = json.loads(q_alt) if q_alt else {}
                 tags_list = json.loads(q_tags) if q_tags else []
 
-                # ✅ CORREÇÃO: normaliza o gabarito lido do banco para comparação
+                # NORMALIZAÇÃO BLINDADA DO GABARITO (Lê o que está no banco e força a ficar perfeito)
                 q_gab_normalizado = normalizar_gabarito(q_gab)
 
                 dif_label = ["Muito Fácil", "Fácil", "Médio", "Difícil", "Muito Difícil"][min(q_dif - 1, 4)] if q_dif else "Médio"
@@ -892,16 +875,17 @@ else:
 
                     if q_id in respondidas:
                         status = respondidas[q_id]
-                        resposta_usuario_salva = str(status['resposta_usuario']).strip().upper()
+                        # NORMALIZA A RESPOSTA QUE O USUÁRIO SALVOU NO BANCO
+                        resposta_usuario_salva = extrair_letra_opcao(status['resposta_usuario'], not is_certo_errado)
 
                         st.markdown("<br><b>Análise Detalhada das Alternativas:</b>", unsafe_allow_html=True)
 
                         for opcao in opcoes[1:]:
-                            # ✅ CORREÇÃO: extrai a letra da opção com função dedicada
+                            # EXTRAI A LETRA EXATA QUE ESTÁ SENDO RENDERIZADA NA TELA AGORA
                             letra_opcao = extrair_letra_opcao(opcao, not is_certo_errado)
 
+                            # COMPARAÇÃO MATEMÁTICA ESTRITA
                             is_resposta_usuario = (letra_opcao == resposta_usuario_salva)
-                            # ✅ CORREÇÃO: comparação exata com gabarito normalizado
                             is_gabarito = (letra_opcao == q_gab_normalizado)
 
                             if is_resposta_usuario:
@@ -927,10 +911,10 @@ else:
                         resp = st.radio("Sua Resposta:", opcoes, key=f"rad_{q_id}", label_visibility="collapsed")
                         if st.button("Confirmar Resposta", key=f"btn_{q_id}"):
                             if resp != "Selecionar...":
-                                # ✅ CORREÇÃO: extrai e normaliza a letra escolhida pelo usuário
+                                # EXTRAÇÃO PURA DA LETRA MARCADA NO MOMENTO DO CLIQUE
                                 letra_escolhida = extrair_letra_opcao(resp, not is_certo_errado)
 
-                                # ✅ CORREÇÃO: comparação exata (sem operador 'in')
+                                # CÁLCULO DO ACERTO USANDO APENAS IGUALDADE EXATA
                                 acertou = 1 if letra_escolhida == q_gab_normalizado else 0
 
                                 c.execute("""
