@@ -162,7 +162,7 @@ def pesquisar_questoes_reais_banca(banca, cargo, materia, tema, quantidade):
         queries = [
             f'"{banca}" "{cargo}" "{materia}" questão prova gabarito (site:tecconcursos.com.br OR site:qconcursos.com)',
             f'prova "{banca}" {cargo} {materia} "{tema}" (site:tecconcursos.com.br OR site:qconcursos.com)',
-            f'"{banca}" {ano} {cargo} {materia} questão enunciado alternativas',
+            f'"{banca}" {cargo} {materia} questão enunciado alternativas',
             f'concurso público "{banca}" {cargo} resultado oficial gabarito {materia}',
         ]
         
@@ -172,7 +172,6 @@ def pesquisar_questoes_reais_banca(banca, cargo, materia, tema, quantidade):
                 resultados = ddgs.text(query, max_results=10)
                 for resultado in resultados:
                     texto = resultado.get('body', '')
-                    # Verifica se parece ser uma questão real (tem gabarito, alternativas, etc)
                     if any(palavra in texto.lower() for palavra in ['gabarito', 'alternativa', 'resposta correta', 'questão', 'prova', 'edital']):
                         questoes_encontradas.append(texto)
                         if len(questoes_encontradas) >= quantidade * 2:
@@ -353,8 +352,7 @@ def questao_ja_existe(enunciado, gabarito):
     c.execute("SELECT id FROM questoes WHERE hash_questao = ?", (hash_q,))
     return c.fetchone() is not None
 
-def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_selecionado, 
-                                    contexto_jurisprudencia, contexto_estilo):
+def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_selecionado, contexto_jurisprudencia, contexto_estilo):
     """Gera prompt EXCLUSIVAMENTE para questões INÉDITAS criadas pela IA."""
     
     perfil_banca = obter_perfil_banca(banca_alvo)
@@ -367,7 +365,6 @@ def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_
     formato_principal = formatos_banca[0]
     estilo_enunciado = perfil_banca["estilo_enunciado"]
     
-    # Monta instruções específicas por formato
     if "Certo/Errado" in formato_principal:
         instrucao_formato = f"""
         FORMATO OBRIGATÓRIO: Certo/Errado (Padrão da {banca_alvo})
@@ -404,7 +401,6 @@ def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_
     PADRÃO DA BANCA {banca_alvo}:
     - Características: {caracteristicas_banca}
     - Estilo: {estilo_enunciado}
-    - Exemplos: {contexto_estilo[:1500]}
     
     NÍVEL: {descricao_dif} (Nível {nivel_dif}/5)
     
@@ -453,13 +449,12 @@ def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_
       ]
     }}
     
-    ⚠️ VERIFICAÇÃO FINAL: Cada questão é COMPLETAMENTE ORIGINAL? Não há repetição entre elas? ✓
+    VERIFICAÇÃO FINAL: Cada questão é COMPLETAMENTE ORIGINAL? Não há repetição entre elas?
     """
     
     return prompt
 
-def gerar_prompt_questoes_reais(qtd, banca_alvo, cargo_alvo, mat_final, tema_selecionado, 
-                                contexto_reais):
+def gerar_prompt_questoes_reais(qtd, banca_alvo, cargo_alvo, mat_final, tema_selecionado, contexto_reais):
     """Gera prompt para TRANSCREVER questões REAIS de provas anteriores."""
     
     perfil_banca = obter_perfil_banca(banca_alvo)
@@ -507,7 +502,7 @@ def gerar_prompt_questoes_reais(qtd, banca_alvo, cargo_alvo, mat_final, tema_sel
           "gabarito": "Gabarito oficial da prova",
           "explicacao": "Explicação ou comentário oficial se disponível",
           "comentarios": {{"A": "Por que está certa/errada", "B": "Por que está certa/errada"}},
-          "fonte": "CEBRASPE 2023 - PCDF - Concurso Público (FORMATO EXATO: BANCA ANO - CARGO/ÓRGÃO)",
+          "fonte": "CEBRASPE 2023 - PCDF - Concurso Público",
           "dificuldade": {nivel_dif},
           "tags": ["prova_real", "oficial", "{cargo_alvo}", "2023"],
           "formato": "{formato_principal}",
@@ -517,7 +512,7 @@ def gerar_prompt_questoes_reais(qtd, banca_alvo, cargo_alvo, mat_final, tema_sel
       ]
     }}
     
-    ⚠️ VERIFICAÇÃO: Todas as questões são REAIS e de provas OFICIAIS? Fonte CORRETA? ✓
+    VERIFICAÇÃO: Todas as questões são REAIS e de provas OFICIAIS? Fonte CORRETA?
     """
     
     return prompt
@@ -753,7 +748,6 @@ else:
                                 enunciado = dados.get("enunciado", "N/A")
                                 gabarito = dados.get("gabarito", "N/A")
                                 
-                                # Verifica se já existe
                                 if questao_ja_existe(enunciado, gabarito):
                                     duplicatas_encontradas += 1
                                     st.warning(f"⚠️ Questão duplicada detectada e descartada (Total: {duplicatas_encontradas})")
@@ -790,7 +784,7 @@ else:
                             else:
                                 st.error(f"❌ Erro na geração: {e}")
 
-            else:  # Questões Reais
+            else:
                 with st.spinner(f"📚 Buscando questões REAIS de provas anteriores da {banca_alvo}..."):
                     contexto_reais = ""
                     
@@ -834,7 +828,6 @@ else:
                                 enunciado = dados.get("enunciado", "N/A")
                                 gabarito = dados.get("gabarito", "N/A")
                                 
-                                # Verifica se já existe
                                 if questao_ja_existe(enunciado, gabarito):
                                     duplicatas_encontradas += 1
                                     st.info(f"ℹ️ Questão real já no banco (ano anterior)")
@@ -938,7 +931,14 @@ else:
                                 is_gabarito = (letra_opcao == gab_oficial)
                                 
                                 if is_resposta_usuario:
-                                    if status['acertou'] == 1: st.markdown(f"<div class='alt-correta'>✅ <b>{opcao}</b> (Sua Resposta Correta)</div>", unsafe_allow_html=True)
-                                    else: st.markdown(f"<div class='alt-errada'>❌ <b>{opcao}</b> (Sua Resposta Incorreta)</div>", unsafe_allow_html=True)
+                                    if status['acertou'] == 1:
+                                        st.markdown(f"<div class='alt-correta'>✅ <b>{opcao}</b> (Sua Resposta Correta)</div>", unsafe_allow_html=True)
+                                    else:
+                                        st.markdown(f"<div class='alt-errada'>❌ <b>{opcao}</b> (Sua Resposta Incorreta)</div>", unsafe_allow_html=True)
                                 elif is_gabarito and status['acertou'] == 0:
-                                    st.markdown(f"<div class='alt-gabarito'>🎯 <b>{opcao}</b> (Gabarito Oficial
+                                    st.markdown(f"<div class='alt-gabarito'>🎯 <b>{opcao}</b> (Gabarito Oficial)</div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"<div class='alt-neutra'>{opcao}</div>", unsafe_allow_html=True)
+                        else:
+                            for opcao in opcoes[1:]:
+                                letra_opcao = opcao.split(")")[0].strip().upper() if alts else opcao.strip().
