@@ -26,20 +26,119 @@ st.markdown("""
     .dif-facil { background-color: #d4edda; color: #155724; }
     .dif-medio { background-color: #fff3cd; color: #856404; }
     .dif-dificil { background-color: #f8d7da; color: #721c24; }
+    .banca-info { background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 12px; border-radius: 5px; margin-bottom: 15px; }
     </style>
 """, unsafe_allow_html=True)
+
+# ================= PERFIL DETALHADO DE BANCAS =================
+PERFIL_BANCAS = {
+    "Cebraspe": {
+        "formatos": ["Certo/Errado"],
+        "caracteristicas": ["questões assertivas", "análise de jurisprudência", "interpretação de normas", "pegadinhas sutis"],
+        "quantidade_alternativas": 2,
+        "estilo_enunciado": "objetivo e direto",
+        "dificuldade_base": 4,
+        "sites_busca": ["cebraspe.com.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca CEBRASPE, use apenas Certo ou Errado. Questões assertivas com jurisprudência consolidada."
+    },
+    "FCC": {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["análise gramatical", "interpretação textual", "conceitos definidos", "raciocínio lógico"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "contextualizado e descritivo",
+        "dificuldade_base": 3,
+        "sites_busca": ["fcc.org.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca FCC, use 5 alternativas (A a E). Questões com análise contextual e raciocínio lógico."
+    },
+    "Vunesp": {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["análise crítica", "jurisprudência recente", "aplicação prática", "casos reais"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "descritivo com contexto",
+        "dificuldade_base": 3,
+        "sites_busca": ["vunesp.com.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca VUNESP, use 5 alternativas (A a E). Questões com análise crítica e aplicação prática."
+    },
+    "OAB": {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["jurisprudência obrigatória", "súmulas do STF", "código de ética", "princípios fundamentais"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "preciso e técnico",
+        "dificuldade_base": 4,
+        "sites_busca": ["oab.org.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca OAB, use 5 alternativas (A a E). Questões baseadas em jurisprudência e códigos éticos."
+    },
+    "ESAF": {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["precisão conceitual", "legislação fiscal", "contabilidade pública", "administração"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "técnico e objetivo",
+        "dificuldade_base": 4,
+        "sites_busca": ["esaf.org.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca ESAF, use 5 alternativas (A a E). Questões com precisão conceitual e legislação específica."
+    },
+    "IADES": {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["conceitos aplicados", "análise comparativa", "legislação específica", "raciocínio crítico"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "contextualizado",
+        "dificuldade_base": 3,
+        "sites_busca": ["iades.org.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca IADES, use 5 alternativas (A a E). Questões com análise comparativa e aplicação prática."
+    },
+    "UFF": {
+        "formatos": ["Múltipla Escolha (A a D)"],
+        "caracteristicas": ["conceitos fundamentais", "legislação básica", "aplicação simples", "interpretação direta"],
+        "quantidade_alternativas": 4,
+        "estilo_enunciado": "direto e simples",
+        "dificuldade_base": 2,
+        "sites_busca": ["uff.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca UFF, use 4 alternativas (A a D). Questões com conceitos fundamentais e aplicação simples."
+    },
+    "UFPR": {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["análise profunda", "jurisprudência consolidada", "interpretação doutrinária"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "aprofundado",
+        "dificuldade_base": 4,
+        "sites_busca": ["ufpr.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca UFPR, use 5 alternativas (A a E). Questões com análise profunda e jurisprudência consolidada."
+    },
+    "Defesa": {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["legislação militar", "hierarquia", "procedimentos operacionais", "regulamentos específicos"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "técnico militar",
+        "dificuldade_base": 3,
+        "sites_busca": ["defesa.gov.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca Defesa, use 5 alternativas (A a E). Questões com legislação militar e procedimentos operacionais."
+    },
+    "Aeronáutica": {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["segurança aérea", "legislação específica", "procedimentos técnicos", "regulamentações FAB"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "técnico e específico",
+        "dificuldade_base": 4,
+        "sites_busca": ["fab.mil.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca Aeronáutica, use 5 alternativas (A a E). Questões sobre segurança aérea e regulamentações."
+    },
+}
 
 # ================= MAPEAMENTO DE DIFICULDADE POR CARGO =================
 PERFIL_CARGO_DIFICULDADE = {
     "Juiz": {"nível": 5, "descrição": "Muito Difícil", "características": ["jurisprudência complexa", "precedentes conflitantes", "interpretação doutrinária", "casos reais polêmicos"]},
     "Procurador da República": {"nível": 5, "descrição": "Muito Difícil", "características": ["conhecimento aprofundado", "jurisprudência recente", "constitucionalismo", "ADIN/ADC"]},
+    "Procurador": {"nível": 5, "descrição": "Muito Difícil", "características": ["conhecimento aprofundado", "jurisprudência recente", "constitucionalismo"]},
     "Juiz de Direito": {"nível": 5, "descrição": "Muito Difícil", "características": ["jurisprudência consolidada", "súmulas e precedentes", "casos jurisprudenciais reais"]},
     "Delegado de Polícia": {"nível": 4, "descrição": "Difícil", "características": ["processual penal", "direitos humanos", "procedimentos investigativos", "jurisprudência aplicada"]},
     "Delegado da PF": {"nível": 4, "descrição": "Difícil", "características": ["criminalística", "direito penal econômico", "legislação federal"]},
+    "Delegado": {"nível": 4, "descrição": "Difícil", "características": ["processual penal", "legislação aplicada"]},
     "Analista": {"nível": 3, "descrição": "Médio", "características": ["conceitos bem definidos", "legislação objetiva", "procedimentos padrão"]},
     "Assistente": {"nível": 2, "descrição": "Fácil a Médio", "características": ["conceitos básicos", "operações simples", "legislação clara"]},
     "Oficial": {"nível": 2, "descrição": "Fácil a Médio", "características": ["procedimentos operacionais", "legislação direta"]},
     "Policial": {"nível": 2, "descrição": "Fácil a Médio", "características": ["procedimentos práticos", "legislação funcional"]},
+    "Investigador": {"nível": 3, "descrição": "Médio", "características": ["técnicas de investigação", "legislação processual"]},
+    "Auditor": {"nível": 4, "descrição": "Difícil", "características": ["contabilidade aplicada", "legislação tributária", "auditoria"]},
 }
 
 # ================= CHAVES DE IA =================
@@ -49,25 +148,51 @@ try:
 except Exception as e:
     st.error("Erro ao carregar as chaves de API. Verifique os Segredos no Streamlit.")
 
-# ================= AGENTE DE BUSCA SNIPER OTIMIZADO =================
-def pesquisar_na_web(query, focar_em_bancos_de_questoes=False, adicionar_jurisprudencia=False):
-    """Busca otimizada com foco em jurisprudência se necessário."""
+# ================= AGENTE DE BUSCA AVANÇADO =================
+def pesquisar_questoes_banca(banca, cargo, materia, tema):
+    """Busca otimizada por banca e cargo com foco em padrão de questões."""
     try:
         ddgs = DDGS()
         
-        if adicionar_jurisprudencia:
-            query_otimizada = f'{query} (site:stf.jus.br OR site:tjdft.jus.br OR site:stj.jus.br OR "jurisprudência" OR "precedente")'
-            resultados = ddgs.text(query_otimizada, max_results=6)
-        elif focar_em_bancos_de_questoes:
-            query_otimizada = f'{query} (site:qconcursos.com OR site:tecconcursos.com.br OR site:questoesdeconcurso.com.br)'
-            resultados = ddgs.text(query_otimizada, max_results=5)
-        else:
-            resultados = ddgs.text(query, max_results=4)
-            
+        perfil_banca = PERFIL_BANCAS.get(banca, {})
+        sites = perfil_banca.get("sites_busca", ["tecconcursos.com.br", "qconcursos.com"])
+        
+        # Constrói query específica para a banca
+        sites_str = " OR ".join([f"site:{site}" for site in sites])
+        query_otimizada = f'"{banca}" "{cargo}" "{materia}" "{tema}" ({sites_str})'
+        
+        resultados = ddgs.text(query_otimizada, max_results=8)
         contexto = "\n".join([f"- {r['body']}" for r in resultados])
-        return contexto[:5000] if contexto else "Nenhum dado encontrado."
+        
+        return contexto[:8000] if contexto else "Dados insuficientes na busca."
     except Exception as e:
-        return "Alerta: Busca web indisponível. Utilize apenas a memória consolidada."
+        return "Busca indisponível. Use memória consolidada."
+
+def pesquisar_jurisprudencia_banca(banca, cargo, materia):
+    """Busca jurisprudência específica da banca."""
+    try:
+        ddgs = DDGS()
+        
+        query = f'jurisprudência "{banca}" "{cargo}" "{materia}" STF STJ (site:stf.jus.br OR site:stj.jus.br OR site:tecconcursos.com.br)'
+        resultados = ddgs.text(query, max_results=6)
+        contexto = "\n".join([f"- {r['body']}" for r in resultados])
+        
+        return contexto[:8000] if contexto else "Jurisprudência insuficiente."
+    except Exception as e:
+        return "Busca de jurisprudência indisponível."
+
+def pesquisar_estilo_questoes_banca(banca):
+    """Busca exemplos do estilo específico da banca."""
+    try:
+        ddgs = DDGS()
+        
+        query = f'exemplo questões "{banca}" estilo padrão formato (site:tecconcursos.com.br OR site:qconcursos.com OR site:youtube.com)'
+        resultados = ddgs.text(query, max_results=5)
+        contexto = "\n".join([f"- {r['body']}" for r in resultados])
+        
+        return contexto[:5000] if contexto else "Exemplos insuficientes."
+    except Exception as e:
+        return "Busca de estilo indisponível."
 
 # ================= MIGRAÇÃO DO BANCO DE DADOS =================
 def migrar_banco_de_dados(conn):
@@ -81,6 +206,12 @@ def migrar_banco_de_dados(conn):
         pass
     
     try:
+        c.execute("ALTER TABLE editais_salvos ADD COLUMN formato_questoes TEXT DEFAULT '[]'")
+        conn.commit()
+    except:
+        pass
+    
+    try:
         c.execute("ALTER TABLE questoes ADD COLUMN dificuldade INTEGER DEFAULT 3")
         conn.commit()
     except:
@@ -88,6 +219,12 @@ def migrar_banco_de_dados(conn):
     
     try:
         c.execute("ALTER TABLE questoes ADD COLUMN tags TEXT DEFAULT '[]'")
+        conn.commit()
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE questoes ADD COLUMN formato_questao TEXT DEFAULT 'Múltipla Escolha'")
         conn.commit()
     except:
         pass
@@ -110,7 +247,8 @@ def iniciar_conexao():
         banca TEXT, cargo TEXT, materia TEXT, tema TEXT,
         enunciado TEXT, alternativas TEXT, gabarito TEXT,
         explicacao TEXT, tipo TEXT, fonte TEXT,
-        dificuldade INTEGER DEFAULT 3, tags TEXT DEFAULT '[]'
+        dificuldade INTEGER DEFAULT 3, tags TEXT DEFAULT '[]',
+        formato_questao TEXT DEFAULT 'Múltipla Escolha'
     )
     """)
     c.execute("""
@@ -124,7 +262,8 @@ def iniciar_conexao():
     CREATE TABLE IF NOT EXISTS editais_salvos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         usuario TEXT, nome_concurso TEXT, banca TEXT, cargo TEXT,
-        dados_json TEXT, data_analise TEXT, nivel_dificuldade INTEGER DEFAULT 3
+        dados_json TEXT, data_analise TEXT, nivel_dificuldade INTEGER DEFAULT 3,
+        formato_questoes TEXT DEFAULT '[]'
     )
     """)
     conn.commit()
@@ -139,7 +278,7 @@ if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = Non
 if "bateria_atual" not in st.session_state: st.session_state.bateria_atual = []
 if "edital_ativo" not in st.session_state: st.session_state.edital_ativo = None
 
-# ================= FUNÇÕES AUXILIARES DE DIFICULDADE =================
+# ================= FUNÇÕES AUXILIARES =================
 def obter_perfil_cargo(cargo_nome):
     """Retorna o perfil de dificuldade para um cargo."""
     for chave, valor in PERFIL_CARGO_DIFICULDADE.items():
@@ -147,79 +286,119 @@ def obter_perfil_cargo(cargo_nome):
             return valor
     return {"nível": 3, "descrição": "Médio", "características": ["Padrão"]}
 
-def gerar_prompt_com_dificuldade(qtd, banca_alvo, cargo_alvo, mat_final, tema_selecionado, 
-                                  tipo, formato_alvo, contexto_da_web, motor_escolhido):
-    """Gera prompt com instruções detalhadas de dificuldade."""
-    
-    perfil = obter_perfil_cargo(cargo_alvo)
-    nivel_dif = perfil["nível"]
-    descricao_dif = perfil["descrição"]
-    caracteristicas = ", ".join(perfil["características"])
-    
-    if "Inédita" in tipo:
-        instrucao_ia = f"""
-        Crie questões INÉDITAS que MIMETIZEM o padrão da banca {banca_alvo} para o cargo de {cargo_alvo}.
-        
-        NÍVEL DE DIFICULDADE: {descricao_dif} (Nível {nivel_dif}/5)
-        CARACTERÍSTICAS ESPERADAS: {caracteristicas}
-        
-        Diretivas de Complexidade:
-        - Para NÍVEL 4-5 (Juiz/Procurador): Use jurisprudência complexa, precedentes conflitantes, 
-          interpretações doutrinárias. Inclua "pegadinhas" sutis baseadas em jurisprudência recente.
-        - Para NÍVEL 3 (Analista): Use conceitos bem definidos, legislação objetiva, procedimentos padrão.
-        - Para NÍVEL 1-2 (Polícia/Assistente): Use procedimentos diretos, legislação clara, conceitos básicos.
-        
-        CONTEXTO JURISPRUDENCIAL: {contexto_da_web if contexto_da_web != "PESQUISA WEB DESATIVADA" else "Use sua memória consolidada"}
-        """
-        
-        if formato_alvo == "Múltipla Escolha (A a E)": 
-            regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
-        elif formato_alvo == "Múltipla Escolha (A a D)": 
-            regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."}'
-        else: 
-            regras_json_alt = '"alternativas": {}'
-            
-        instrucao_formato = f"FORMATO: {formato_alvo}"
-        instrucao_fonte = 'Preencha com "Inédita IA - Estilo [Banca] - Nível [' + descricao_dif + ']"'
-    else:
-        instrucao_ia = f"""
-        TRANSCREVA questões REAIS da banca {banca_alvo} para o cargo de {cargo_alvo}.
-        Cargo: {cargo_alvo} | Banca: {banca_alvo} | Nível Esperado: {descricao_dif}
-        Busque questões que reflitam o nível realmente cobrado pela banca, não simplifique.
-        """
-        regras_json_alt = '"alternativas": {"A": "...", "B": "..."} // Use o formato original da prova.'
-        instrucao_formato = "MANTENHA a formatação original da prova real."
-        instrucao_fonte = f'MANDATÓRIO: "[Banca] - [Ano] - [Órgão] - [Cargo]". Se desconhecido: "Banco [Banca] - Nível {descricao_dif}"'
+def obter_perfil_banca(banca_nome):
+    """Retorna o perfil detalhado da banca."""
+    for chave, valor in PERFIL_BANCAS.items():
+        if chave.lower() in banca_nome.lower() or banca_nome.lower() in chave.lower():
+            return valor
+    return {
+        "formatos": ["Múltipla Escolha (A a E)"],
+        "caracteristicas": ["padrão"],
+        "quantidade_alternativas": 5,
+        "estilo_enunciado": "padrão",
+        "dificuldade_base": 3,
+        "sites_busca": ["tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Formato padrão com 5 alternativas."
+    }
 
+def gerar_prompt_com_banca_e_dificuldade(qtd, banca_alvo, cargo_alvo, mat_final, tema_selecionado, 
+                                          tipo, contexto_questoes, contexto_jurisprudencia, contexto_estilo):
+    """Gera prompt customizado por banca e cargo."""
+    
+    perfil_banca = obter_perfil_banca(banca_alvo)
+    perfil_cargo = obter_perfil_cargo(cargo_alvo)
+    
+    nivel_dif = perfil_cargo["nível"]
+    descricao_dif = perfil_cargo["descrição"]
+    formatos_banca = perfil_banca["formatos"]
+    caracteristicas_banca = ", ".join(perfil_banca["caracteristicas"])
+    formato_principal = formatos_banca[0]
+    qtd_alternativas = perfil_banca["quantidade_alternativas"]
+    estilo_enunciado = perfil_banca["estilo_enunciado"]
+    
+    # Monta instruções específicas por formato
+    if "Certo/Errado" in formato_principal:
+        instrucao_formato = f"""
+        FORMATO OBRIGATÓRIO: Certo/Errado (Padrão da {banca_alvo})
+        - Cada questão deve ter uma assertiva clara
+        - Gabarito: "Certo" ou "Errado"
+        - Sem alternativas A, B, C, D, E
+        - Estilo: {estilo_enunciado}
+        
+        ALTERNATIVAS PARA ANÁLISE (não usar em JSON, apenas explicação):
+        {{
+          "assertiva": "A assertiva será apresentada como texto",
+          "verdadeira_ou_falsa": "Indicar se é verdadeira ou falsa",
+          "explicacao_por_que": "Explicar por que está certa ou errada"
+        }}
+        """
+        regras_json_alt = '"alternativas": {}'
+    elif "A a D" in formato_principal:
+        instrucao_formato = f"""
+        FORMATO OBRIGATÓRIO: Múltipla Escolha com 4 alternativas (A, B, C, D)
+        - Banca {banca_alvo} usa exatamente 4 opções
+        - Estilo: {estilo_enunciado}
+        """
+        regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."}'
+    else:
+        instrucao_formato = f"""
+        FORMATO OBRIGATÓRIO: Múltipla Escolha com 5 alternativas (A, B, C, D, E)
+        - Banca {banca_alvo} usa exatamente 5 opções
+        - Estilo: {estilo_enunciado}
+        """
+        regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
+    
+    instrucao_ia = f"""
+    Crie questões INÉDITAS que MIMETIZEM EXATAMENTE o padrão da banca {banca_alvo} para o cargo de {cargo_alvo}.
+    
+    CONTEXTO DA BANCA: {caracteristicas_banca}
+    EXEMPLOS DO ESTILO DA BANCA:
+    {contexto_estilo[:2000]}
+    
+    NÍVEL DE DIFICULDADE: {descricao_dif} (Nível {nivel_dif}/5)
+    
+    Diretivas de Complexidade:
+    - Para NÍVEL 4-5 (Juiz/Procurador/Delegado): Use jurisprudência complexa, precedentes conflitantes, pegadinhas sutis
+    - Para NÍVEL 3 (Analista/Investigador): Use conceitos bem definidos, legislação objetiva
+    - Para NÍVEL 1-2 (Policial/Assistente): Use procedimentos diretos, legislação clara
+    
+    JURISPRUDÊNCIA E LEGISLAÇÃO APLICÁVEL:
+    {contexto_jurisprudencia[:3000]}
+    
+    QUESTÕES SIMILARES DA BANCA:
+    {contexto_questoes[:3000]}
+    """
+    
     prompt = f"""
-    Atua sob o Protocolo de Rigor Máximo Brasileiro com foco em DIFICULDADE REALISTA.
+    PROTOCOLO DE GERAÇÃO DE QUESTÕES - MÁXIMA FIDELIDADE À BANCA
     
     {instrucao_ia}
     
-    MISSÃO: Entregue {qtd} questão(ões) com dificuldade consistente.
+    MISSÃO: Entregue {qtd} questão(ões) com dificuldade {descricao_dif} no formato exato da {banca_alvo}.
     Matéria: {mat_final} | Tema: {tema_selecionado}
     
-    DIRETRIZES IMPERATIVAS:
-    1. {instrucao_formato}
-    2. BASE JURÍDICA: Gabarito fundamentado no ordenamento brasileiro e jurisprudência vigente.
-    3. ANATOMIA DO ERRO: NO CAMPO 'comentarios', SEMPRE explique por que CADA alternativa está certa/errada.
-       - Alternativas erradas devem ter explicações que as diferenciem sutilmente da correta.
-       - Para NÍVEL 4-5: Inclua referência a jurisprudência ou súmulas.
-    4. {instrucao_fonte}
-    5. VALIDAÇÃO DE DIFICULDADE: Esta questão está realmente no nível {descricao_dif}? Se não, REESCREVA.
+    {instrucao_formato}
     
-    JSON EXATO:
+    DIRETRIZES IMPERATIVAS:
+    1. FIDELIDADE AO ESTILO: Copie exatamente o padrão de questões da {banca_alvo}
+    2. BASE JURÍDICA: Gabarito fundamentado em jurisprudência consolidada e legislação vigente
+    3. ANATOMIA DO ERRO: SEMPRE explique por que CADA alternativa está certa/errada
+    4. ALTERNATIVAS PLAUSÍVEIS: Todas devem parecer corretas a quem não estudou o tema
+    5. VALIDAÇÃO: Esta questão é realmente do nível {descricao_dif}? Está no formato {formato_principal}?
+    
+    JSON EXATO (IMPERATIVO):
     {{
       "questoes": [
         {{
-          "enunciado": "Texto claro e objetivo da questão",
+          "enunciado": "Texto claro no estilo {estilo_enunciado} da {banca_alvo}",
           {regras_json_alt},
-          "gabarito": "Letra ou Certo/Errado",
-          "explicacao": "Fundamentação legal e jurisprudencial geral da questão.",
-          "comentarios": {{"A": "Por que está certa/errada", "B": "Por que está certa/errada"}},
-          "fonte": "Instrução de fonte validada",
+          "gabarito": "Resposta única correta",
+          "explicacao": "Fundamentação legal e jurisprudencial completa",
+          "comentarios": {{"A": "Por que está certa/errada", "B": "Por que está certa/errada", "C": "Por que está certa/errada"}},
+          "fonte": "Inédita IA - Estilo {banca_alvo} - {descricao_dif}",
           "dificuldade": {nivel_dif},
-          "tags": ["jurisprudência", "conceitual"]
+          "tags": ["jurisprudência", "legislação", "{cargo_alvo}"],
+          "formato": "{formato_principal}"
         }}
       ]
     }}
@@ -271,27 +450,31 @@ with st.sidebar:
                 idx_selecionado = opcoes_editais.index(escolha) - 1
                 linha_selecionada = df_editais.iloc[idx_selecionado]
                 perfil_cargo_detectado = obter_perfil_cargo(linha_selecionada['cargo'])
+                perfil_banca_detectada = obter_perfil_banca(linha_selecionada['banca'])
                 st.session_state.edital_ativo = {
                     "nome_concurso": linha_selecionada['nome_concurso'],
                     "banca": linha_selecionada['banca'],
                     "cargo": linha_selecionada['cargo'],
                     "materias": json.loads(linha_selecionada['dados_json'])['materias'],
-                    "nivel_dificuldade": perfil_cargo_detectado["nível"]
+                    "nivel_dificuldade": perfil_cargo_detectado["nível"],
+                    "formatos": perfil_banca_detectada["formatos"]
                 }
-                st.success(f"✅ Edital carregado! Nível: {perfil_cargo_detectado['descrição']}")
+                st.success(f"✅ Edital carregado! Banca: {linha_selecionada['banca']} | Nível: {perfil_cargo_detectado['descrição']}")
         else:
             st.info("A biblioteca está vazia. Adicione um edital abaixo.")
 
         st.write("---")
         with st.expander("➕ Cadastrar Novo Edital", expanded=True if df_editais.empty else False):
             nome_novo = st.text_input("Nome do Concurso (Ex: PCDF):")
-            banca_nova = st.text_input("Banca Examinadora:")
+            banca_nova = st.text_input("Banca Examinadora (Ex: Cebraspe, FCC, Vunesp):")
             cargo_novo = st.text_input("Cargo:")
             texto_colado = st.text_area("Cole o texto do Conteúdo Programático:")
 
             if st.button("Salvar Edital no Perfil", use_container_width=True) and nome_novo and texto_colado:
-                with st.spinner("Estruturando matérias..."):
-                    perfil = obter_perfil_cargo(cargo_novo)
+                with st.spinner("Estruturando matérias e detectando formato da banca..."):
+                    perfil_cargo = obter_perfil_cargo(cargo_novo)
+                    perfil_banca = obter_perfil_banca(banca_nova)
+                    
                     prompt = f"""
                     Leia o texto abaixo e liste APENAS as disciplinas/matérias. 
                     Responda em JSON: {{"materias": ["Disc 1", "Disc 2"]}}.
@@ -305,12 +488,14 @@ with st.sidebar:
                             response_format={"type": "json_object"}
                         )
                         texto_json = resposta.choices[0].message.content
+                        formatos_json = json.dumps(perfil_banca["formatos"])
+                        
                         c.execute("""
-                        INSERT INTO editais_salvos (usuario, nome_concurso, banca, cargo, dados_json, data_analise, nivel_dificuldade)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """, (st.session_state.usuario_atual, nome_novo, banca_nova, cargo_novo, texto_json, str(datetime.now()), perfil["nível"]))
+                        INSERT INTO editais_salvos (usuario, nome_concurso, banca, cargo, dados_json, data_analise, nivel_dificuldade, formato_questoes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (st.session_state.usuario_atual, nome_novo, banca_nova, cargo_novo, texto_json, str(datetime.now()), perfil_cargo["nível"], formatos_json))
                         conn.commit()
-                        st.success("Salvo com sucesso!")
+                        st.success(f"✅ Edital salvo! Formato detectado: {perfil_banca['formatos'][0]}")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao estruturar: {e}")
@@ -351,48 +536,45 @@ else:
             banca_alvo = e['banca']
             cargo_alvo = e['cargo']
             nivel_dificuldade_auto = e.get('nivel_dificuldade', 3)
+            formatos_banca = e.get('formatos', ["Múltipla Escolha (A a E)"])
             perfil_cargo = obter_perfil_cargo(cargo_alvo)
+            perfil_banca = obter_perfil_banca(banca_alvo)
             
-            st.caption(f"🎯 **Foco Atual:** {e['nome_concurso']} | **Banca:** {banca_alvo} | **Cargo:** {cargo_alvo}")
-            st.markdown(f"<span class='dificuldade-badge dif-{'dificil' if nivel_dificuldade_auto >= 4 else 'medio' if nivel_dificuldade_auto >= 3 else 'facil'}'>Nível: {perfil_cargo['descrição']}</span>", unsafe_allow_html=True)
+            st.markdown(f"<div class='banca-info'>🏢 <b>BANCA DETECTADA:</b> {banca_alvo} | <b>FORMATO:</b> {formatos_banca[0]} | <b>CARGO:</b> {cargo_alvo} | <b>NÍVEL:</b> {perfil_cargo['descrição']}</div>", unsafe_allow_html=True)
             
             lista_materias = ["Aleatório"] + e['materias']
             c1, c2 = st.columns(2)
             with c1: mat_selecionada = st.selectbox("Escolha a Matéria", lista_materias)
             with c2: tema_selecionado = st.text_input("Tema específico (ou deixe Aleatório)", "Aleatório")
         else:
-            st.warning("Carregue um edital na barra lateral para aplicar o filtro automático.")
+            st.warning("⚠️ Carregue um edital na barra lateral para usar a configuração automática.")
             c1, c2, c3 = st.columns(3)
             with c1: banca_alvo = st.text_input("Banca", "Cebraspe")
             with c2: cargo_alvo = st.text_input("Cargo", "Delegado")
             with c3: mat_selecionada = st.text_input("Matéria", "Direito Penal")
             tema_selecionado = st.text_input("Tema específico", "Aleatório")
             nivel_dificuldade_auto = 3
+            formatos_banca = ["Múltipla Escolha (A a E)"]
+            perfil_banca = obter_perfil_banca(banca_alvo)
 
-        c3, c4, c5 = st.columns([2, 2, 1])
-        with c3: 
+        c3, c4 = st.columns(2)
+        with c3:
             tipo = st.selectbox("Origem do Material", [
                 "🧠 Inédita IA", 
                 "🌐 Questões Reais",
                 "📂 Revisão (Sortear banco local)"
             ])
-        with c4:
-            formato_alvo = st.selectbox("Formato (Apenas p/ Inéditas)", [
-                "Múltipla Escolha (A a E)", 
-                "Múltipla Escolha (A a D)", 
-                "Certo / Errado"
-            ])
-        with c5: 
+        with c4: 
             qtd = st.slider("Quantidade", 1, 10, 5)
             
-        usar_web = st.checkbox("🌐 Usar Pesquisa na Web (Maior precisão)", value=False)
+        usar_web = st.checkbox("🌐 Usar Pesquisa na Web (busca questões similares da banca)", value=True)
 
         if st.button("Forjar Simulado", type="primary", use_container_width=True):
             mat_final = random.choice(e['materias']) if mat_selecionada == "Aleatório" and st.session_state.edital_ativo else mat_selecionada
             instrucao_tema = f"Sorteie um tema complexo em {mat_final}" if tema_selecionado.lower() == "aleatório" else tema_selecionado
 
             if "Revisão" in tipo:
-                st.info("A resgatar histórico do banco local (Custo: $0.00)...")
+                st.info("🔄 A resgatar histórico do banco local...")
                 c.execute("""
                     SELECT id FROM questoes 
                     WHERE (banca LIKE ? OR cargo LIKE ? OR materia LIKE ?)
@@ -406,84 +588,84 @@ else:
                     st.warning("Banco local insuficiente.")
 
             else:
-                with st.spinner(f"Conectando ao motor {motor_escolhido.split(' ')[0]} e dissecando alternativas..."):
-                    
-                    contexto_da_web = "PESQUISA WEB DESATIVADA PELO USUÁRIO. USE APENAS SUA MEMÓRIA."
+                with st.spinner(f"🔍 Buscando padrão da banca {banca_alvo}..."):
+                    contexto_questoes = ""
+                    contexto_jurisprudencia = ""
+                    contexto_estilo = ""
                     
                     if usar_web:
-                        perfil = obter_perfil_cargo(cargo_alvo)
-                        query_edital = f'"{banca_alvo}" "{cargo_alvo}" concurso edital'
+                        with st.spinner(f"📚 Pesquisando questões similares..."):
+                            contexto_questoes = pesquisar_questoes_banca(banca_alvo, cargo_alvo, mat_final, tema_selecionado)
                         
-                        if "Inédita" in tipo:
-                            if perfil["nível"] >= 4:
-                                query_questao = f"jurisprudência {mat_final} {tema_selecionado} STF STJ"
-                                contexto_da_web = pesquisar_na_web(query_questao, adicionar_jurisprudencia=True)
-                            else:
-                                query_questao = f"legislação {mat_final} {tema_selecionado}"
-                                contexto_da_web = pesquisar_na_web(query_questao, focar_em_bancos_de_questoes=False)
-                        else:
-                            query_questao = f'"{banca_alvo}" "{cargo_alvo}" "{mat_final}" "{tema_selecionado}"'
-                            contexto_da_web = pesquisar_na_web(query_questao, focar_em_bancos_de_questoes=True)
+                        with st.spinner(f"⚖️ Buscando jurisprudência..."):
+                            contexto_jurisprudencia = pesquisar_jurisprudencia_banca(banca_alvo, cargo_alvo, mat_final)
+                        
+                        with st.spinner(f"🎯 Analisando estilo da banca..."):
+                            contexto_estilo = pesquisar_estilo_questoes_banca(banca_alvo)
+                    else:
+                        contexto_questoes = f"Estudando questões da {banca_alvo} para {cargo_alvo}"
+                        contexto_jurisprudencia = "Usando jurisprudência consolidada de memória"
+                        contexto_estilo = "Usando padrão conhecido da banca"
 
-                    prompt = gerar_prompt_com_dificuldade(
+                    prompt = gerar_prompt_com_banca_e_dificuldade(
                         qtd, banca_alvo, cargo_alvo, mat_final, instrucao_tema,
-                        tipo, formato_alvo, contexto_da_web, motor_escolhido
+                        tipo, contexto_questoes, contexto_jurisprudencia, contexto_estilo
                     )
 
-                    try:
-                        if "Groq" in motor_escolhido:
-                            resposta = client_groq.chat.completions.create(
-                                messages=[{"role": "user", "content": prompt}],
-                                model="llama-3.3-70b-versatile",
-                                temperature=0.0,
-                                response_format={"type": "json_object"}
-                            )
-                        else:
-                            resposta = client_deepseek.chat.completions.create(
-                                messages=[{"role": "user", "content": prompt}],
-                                model="deepseek-chat",
-                                temperature=0.0,
-                                response_format={"type": "json_object"},
-                                max_tokens=4000
-                            )
-                        
-                        dados_json = json.loads(resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip())
-                        lista_questoes = dados_json.get("questoes", [])
-                        if not lista_questoes and isinstance(dados_json, list): lista_questoes = dados_json
-                        
-                        novas_ids = []
-                        for dados in lista_questoes:
-                            enunciado = dados.get("enunciado", "N/A")
-                            gabarito = dados.get("gabarito", "N/A")
-                            fonte = dados.get("fonte", "Fonte Pendente")
-                            dificuldade = dados.get("dificuldade", nivel_dificuldade_auto)
-                            tags = json.dumps(dados.get("tags", []))
-                            alts_dict = dados.get("alternativas", {})
+                    with st.spinner(f"🚀 Gerando questões no estilo {banca_alvo}..."):
+                        try:
+                            if "Groq" in motor_escolhido:
+                                resposta = client_groq.chat.completions.create(
+                                    messages=[{"role": "user", "content": prompt}],
+                                    model="llama-3.3-70b-versatile",
+                                    temperature=0.0,
+                                    response_format={"type": "json_object"}
+                                )
+                            else:
+                                resposta = client_deepseek.chat.completions.create(
+                                    messages=[{"role": "user", "content": prompt}],
+                                    model="deepseek-chat",
+                                    temperature=0.0,
+                                    response_format={"type": "json_object"},
+                                    max_tokens=4000
+                                )
                             
-                            if "Inédita" in tipo:
-                                if "Certo" in formato_alvo: alts_dict = {} 
-                                elif "A a D" in formato_alvo: alts_dict = {k: v for k, v in alts_dict.items() if k in ["A", "B", "C", "D"]}
-                            alternativas = json.dumps(alts_dict)
+                            dados_json = json.loads(resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip())
+                            lista_questoes = dados_json.get("questoes", [])
+                            if not lista_questoes and isinstance(dados_json, list): 
+                                lista_questoes = dados_json
+                            
+                            novas_ids = []
+                            for dados in lista_questoes:
+                                enunciado = dados.get("enunciado", "N/A")
+                                gabarito = dados.get("gabarito", "N/A")
+                                fonte = dados.get("fonte", f"Inédita IA - {banca_alvo}")
+                                dificuldade = dados.get("dificuldade", nivel_dificuldade_auto)
+                                tags = json.dumps(dados.get("tags", []))
+                                formato_questao = dados.get("formato", formatos_banca[0])
+                                alts_dict = dados.get("alternativas", {})
+                                
+                                alternativas = json.dumps(alts_dict)
+                                explicacao_texto = dados.get("explicacao", "N/A")
+                                comentarios_dict = dados.get("comentarios", {})
+                                explicacao_final = json.dumps({"geral": explicacao_texto, "detalhes": comentarios_dict})
 
-                            explicacao_texto = dados.get("explicacao", "N/A")
-                            comentarios_dict = dados.get("comentarios", {})
-                            explicacao_final = json.dumps({"geral": explicacao_texto, "detalhes": comentarios_dict})
-
-                            c.execute("""
-                            INSERT INTO questoes (banca, cargo, materia, tema, enunciado, alternativas, gabarito, explicacao, tipo, fonte, dificuldade, tags)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """, (banca_alvo, cargo_alvo, mat_final, tema_selecionado, enunciado, alternativas, gabarito, explicacao_final, tipo, fonte, dificuldade, tags))
-                            novas_ids.append(c.lastrowid)
-                        
-                        conn.commit()
-                        st.session_state.bateria_atual = novas_ids
-                        st.rerun()
-                        
-                    except Exception as e:
-                        if "rate_limit_exceeded" in str(e).lower() or "429" in str(e):
-                            st.error("⚠️ **O limite diário do Groq foi atingido!** Use o motor **DeepSeek** para continuar.")
-                        else:
-                            st.error(f"Erro na geração: {e}")
+                                c.execute("""
+                                INSERT INTO questoes (banca, cargo, materia, tema, enunciado, alternativas, gabarito, explicacao, tipo, fonte, dificuldade, tags, formato_questao)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                """, (banca_alvo, cargo_alvo, mat_final, tema_selecionado, enunciado, alternativas, gabarito, explicacao_final, tipo, fonte, dificuldade, tags, formato_questao))
+                                novas_ids.append(c.lastrowid)
+                            
+                            conn.commit()
+                            st.session_state.bateria_atual = novas_ids
+                            st.success(f"✅ {len(novas_ids)} questões geradas no padrão da {banca_alvo}!")
+                            st.rerun()
+                            
+                        except Exception as e:
+                            if "rate_limit_exceeded" in str(e).lower() or "429" in str(e):
+                                st.error("⚠️ **Limite diário do Groq atingido!** Use o motor **DeepSeek**.")
+                            else:
+                                st.error(f"❌ Erro na geração: {e}")
 
     if st.session_state.bateria_atual:
         st.write("---")
@@ -493,11 +675,11 @@ else:
         respondidas = df_respostas.set_index('questao_id').to_dict('index')
 
         for i, q_id in enumerate(st.session_state.bateria_atual):
-            c.execute("SELECT banca, cargo, materia, enunciado, alternativas, gabarito, explicacao, fonte, dificuldade, tags FROM questoes WHERE id = ?", (q_id,))
+            c.execute("SELECT banca, cargo, materia, enunciado, alternativas, gabarito, explicacao, fonte, dificuldade, tags, formato_questao FROM questoes WHERE id = ?", (q_id,))
             dados = c.fetchone()
             
             if dados:
-                q_banca, q_cargo, q_mat, q_enun, q_alt, q_gab, q_exp, q_fonte, q_dif, q_tags = dados
+                q_banca, q_cargo, q_mat, q_enun, q_alt, q_gab, q_exp, q_fonte, q_dif, q_tags, q_formato = dados
                 alts = json.loads(q_alt) if q_alt else {}
                 tags_list = json.loads(q_tags) if q_tags else []
                 
@@ -517,12 +699,9 @@ else:
                     exp_detalhes = {}
                 
                 with st.container(border=True):
-                    if "Inédita" in q_fonte and "Reais" in tipo:
-                        st.error(f"⚠️ A inteligência artificial não localizou uma prova original. A questão foi forjada no estilo da banca.")
-                    
                     col_info, col_dif = st.columns([4, 1])
                     with col_info:
-                        st.caption(f"**Item {i+1}** | 📚 {q_mat} | 🏷️ **Origem:** {q_fonte}")
+                        st.caption(f"**Item {i+1}** | 🏢 {q_banca} | 📚 {q_mat} | 🎯 {q_formato}")
                     with col_dif:
                         st.markdown(f"<span class='dificuldade-badge {dif_classe}'>{dif_label}</span>", unsafe_allow_html=True)
                     
@@ -531,28 +710,48 @@ else:
                     
                     st.markdown(f"#### {q_enun}")
                     
-                    opcoes = ["Selecionar..."] + ([f"{letra}) {texto}" for letra, texto in alts.items()] if alts else ["Certo", "Errado"])
+                    if "Certo/Errado" in q_formato:
+                        opcoes = ["Selecionar...", "Certo", "Errado"]
+                    else:
+                        opcoes = ["Selecionar..."] + [f"{letra}) {texto}" for letra, texto in alts.items()] if alts else ["Selecionar...", "A", "B", "C", "D", "E"]
 
                     if q_id in respondidas:
                         status = respondidas[q_id]
                         st.markdown("<br><b>Análise Detalhada das Alternativas:</b>", unsafe_allow_html=True)
-                        for opcao in opcoes[1:]:
-                            letra_opcao = opcao.split(")")[0].strip().upper() if alts else opcao.strip().upper()
-                            gab_oficial = str(q_gab).strip().upper()
-                            
-                            is_resposta_usuario = (status['resposta_usuario'] == letra_opcao)
-                            is_gabarito = (letra_opcao in gab_oficial or gab_oficial in letra_opcao)
-                            
-                            if is_resposta_usuario:
-                                if status['acertou'] == 1: st.markdown(f"<div class='alt-correta'>✅ <b>{opcao}</b> (Sua Resposta Correta)</div>", unsafe_allow_html=True)
-                                else: st.markdown(f"<div class='alt-errada'>❌ <b>{opcao}</b> (Sua Resposta Incorreta)</div>", unsafe_allow_html=True)
-                            elif is_gabarito and status['acertou'] == 0:
-                                st.markdown(f"<div class='alt-gabarito'>🎯 <b>{opcao}</b> (Gabarito Oficial)</div>", unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"<div class='alt-neutra'>{opcao}</div>", unsafe_allow_html=True)
+                        
+                        if "Certo/Errado" in q_formato:
+                            for opcao in opcoes[1:]:
+                                letra_opcao = opcao.strip().upper()
+                                gab_oficial = str(q_gab).strip().upper()
                                 
-                            if letra_opcao in exp_detalhes and exp_detalhes[letra_opcao]:
-                                st.markdown(f"<div class='comentario-alt'>💡 <i><b>Por que?</b> {exp_detalhes[letra_opcao]}</i></div>", unsafe_allow_html=True)
+                                is_resposta_usuario = (status['resposta_usuario'] == letra_opcao)
+                                is_gabarito = (letra_opcao == gab_oficial)
+                                
+                                if is_resposta_usuario:
+                                    if status['acertou'] == 1: st.markdown(f"<div class='alt-correta'>✅ <b>{opcao}</b> (Sua Resposta Correta)</div>", unsafe_allow_html=True)
+                                    else: st.markdown(f"<div class='alt-errada'>❌ <b>{opcao}</b> (Sua Resposta Incorreta)</div>", unsafe_allow_html=True)
+                                elif is_gabarito and status['acertou'] == 0:
+                                    st.markdown(f"<div class='alt-gabarito'>🎯 <b>{opcao}</b> (Gabarito Oficial)</div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"<div class='alt-neutra'>{opcao}</div>", unsafe_allow_html=True)
+                        else:
+                            for opcao in opcoes[1:]:
+                                letra_opcao = opcao.split(")")[0].strip().upper() if alts else opcao.strip().upper()
+                                gab_oficial = str(q_gab).strip().upper()
+                                
+                                is_resposta_usuario = (status['resposta_usuario'] == letra_opcao)
+                                is_gabarito = (letra_opcao in gab_oficial or gab_oficial in letra_opcao)
+                                
+                                if is_resposta_usuario:
+                                    if status['acertou'] == 1: st.markdown(f"<div class='alt-correta'>✅ <b>{opcao}</b> (Sua Resposta Correta)</div>", unsafe_allow_html=True)
+                                    else: st.markdown(f"<div class='alt-errada'>❌ <b>{opcao}</b> (Sua Resposta Incorreta)</div>", unsafe_allow_html=True)
+                                elif is_gabarito and status['acertou'] == 0:
+                                    st.markdown(f"<div class='alt-gabarito'>🎯 <b>{opcao}</b> (Gabarito Oficial)</div>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"<div class='alt-neutra'>{opcao}</div>", unsafe_allow_html=True)
+                                
+                                if letra_opcao in exp_detalhes and exp_detalhes[letra_opcao]:
+                                    st.markdown(f"<div class='comentario-alt'>💡 <i><b>Por que?</b> {exp_detalhes[letra_opcao]}</i></div>", unsafe_allow_html=True)
 
                         st.write("<br>", unsafe_allow_html=True)
                         with st.expander("📖 Fundamentação Legal Geral"): st.write(exp_geral)
@@ -561,7 +760,11 @@ else:
                         resp = st.radio("Sua Resposta:", opcoes, key=f"rad_{q_id}", label_visibility="collapsed")
                         if st.button("Confirmar Resposta", key=f"btn_{q_id}"):
                             if resp != "Selecionar...":
-                                letra = resp.split(")")[0].strip().upper() if alts else resp.strip().upper()
+                                if "Certo/Errado" in q_formato:
+                                    letra = resp.strip().upper()
+                                else:
+                                    letra = resp.split(")")[0].strip().upper() if alts else resp.strip().upper()
+                                
                                 gab = str(q_gab).strip().upper()
                                 acertou = 1 if letra in gab or gab in letra else 0
                                 c.execute("""
