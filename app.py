@@ -56,7 +56,6 @@ def pesquisar_na_web(query, focar_em_bancos_de_questoes=False, adicionar_jurispr
         ddgs = DDGS()
         
         if adicionar_jurisprudencia:
-            # Para cargos de alta dificuldade, prioriza jurisprudência
             query_otimizada = f'{query} (site:stf.jus.br OR site:tjdft.jus.br OR site:stj.jus.br OR "jurisprudência" OR "precedente")'
             resultados = ddgs.text(query_otimizada, max_results=6)
         elif focar_em_bancos_de_questoes:
@@ -70,6 +69,35 @@ def pesquisar_na_web(query, focar_em_bancos_de_questoes=False, adicionar_jurispr
     except Exception as e:
         return "Alerta: Busca web indisponível. Utilize apenas a memória consolidada."
 
+# ================= MIGRAÇÃO DO BANCO DE DADOS =================
+def migrar_banco_de_dados(conn):
+    """Adiciona colunas faltantes ao banco de dados existente."""
+    c = conn.cursor()
+    
+    try:
+        c.execute("ALTER TABLE editais_salvos ADD COLUMN nivel_dificuldade INTEGER DEFAULT 3")
+        conn.commit()
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE questoes ADD COLUMN dificuldade INTEGER DEFAULT 3")
+        conn.commit()
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE questoes ADD COLUMN tags TEXT DEFAULT '[]'")
+        conn.commit()
+    except:
+        pass
+    
+    try:
+        c.execute("ALTER TABLE respostas ADD COLUMN tempo_resposta INTEGER DEFAULT 0")
+        conn.commit()
+    except:
+        pass
+
 # ================= BANCO DE DADOS =================
 @st.cache_resource
 def iniciar_conexao():
@@ -82,36 +110,28 @@ def iniciar_conexao():
         banca TEXT, cargo TEXT, materia TEXT, tema TEXT,
         enunciado TEXT, alternativas TEXT, gabarito TEXT,
         explicacao TEXT, tipo TEXT, fonte TEXT,
-        dificuldade INTEGER, tags TEXT
+        dificuldade INTEGER DEFAULT 3, tags TEXT DEFAULT '[]'
     )
     """)
     c.execute("""
     CREATE TABLE IF NOT EXISTS respostas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         usuario TEXT, questao_id INTEGER, resposta_usuario TEXT,
-        acertou INTEGER, data TEXT, tempo_resposta INTEGER
+        acertou INTEGER, data TEXT, tempo_resposta INTEGER DEFAULT 0
     )
     """)
     c.execute("""
     CREATE TABLE IF NOT EXISTS editais_salvos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         usuario TEXT, nome_concurso TEXT, banca TEXT, cargo TEXT,
-        dados_json TEXT, data_analise TEXT, nivel_dificuldade INTEGER
+        dados_json TEXT, data_analise TEXT, nivel_dificuldade INTEGER DEFAULT 3
     )
     """)
-    
-    # Adicionar coluna dificuldade se não existir
-    try:
-        c.execute("ALTER TABLE questoes ADD COLUMN dificuldade INTEGER DEFAULT 3")
-        c.execute("ALTER TABLE questoes ADD COLUMN tags TEXT DEFAULT '[]'")
-        conn.commit()
-    except:
-        pass
-    
     conn.commit()
     return conn
 
 conn = iniciar_conexao()
+migrar_banco_de_dados(conn)
 c = conn.cursor()
 
 # ================= INICIALIZAÇÃO DE MEMÓRIA =================
@@ -172,7 +192,7 @@ def gerar_prompt_com_dificuldade(qtd, banca_alvo, cargo_alvo, mat_final, tema_se
         instrucao_fonte = f'MANDATÓRIO: "[Banca] - [Ano] - [Órgão] - [Cargo]". Se desconhecido: "Banco [Banca] - Nível {descricao_dif}"'
 
     prompt = f"""
-    Atue sob o Protocolo de Rigor Máximo Brasileiro com foco em DIFICULDADE REALISTA.
+    Atua sob o Protocolo de Rigor Máximo Brasileiro com foco em DIFICULDADE REALISTA.
     
     {instrucao_ia}
     
@@ -199,7 +219,7 @@ def gerar_prompt_com_dificuldade(qtd, banca_alvo, cargo_alvo, mat_final, tema_se
           "comentarios": {{"A": "Por que está certa/errada", "B": "Por que está certa/errada"}},
           "fonte": "Instrução de fonte validada",
           "dificuldade": {nivel_dif},
-          "tags": ["jurisprudência", "conceitual"] // Tags relevantes
+          "tags": ["jurisprudência", "conceitual"]
         }}
       ]
     }}
@@ -396,7 +416,6 @@ else:
                         
                         if "Inédita" in tipo:
                             if perfil["nível"] >= 4:
-                                # Para cargos altos, busca jurisprudência
                                 query_questao = f"jurisprudência {mat_final} {tema_selecionado} STF STJ"
                                 contexto_da_web = pesquisar_na_web(query_questao, adicionar_jurisprudencia=True)
                             else:
@@ -406,14 +425,12 @@ else:
                             query_questao = f'"{banca_alvo}" "{cargo_alvo}" "{mat_final}" "{tema_selecionado}"'
                             contexto_da_web = pesquisar_na_web(query_questao, focar_em_bancos_de_questoes=True)
 
-                    # Gera prompt com dificuldade
                     prompt = gerar_prompt_com_dificuldade(
                         qtd, banca_alvo, cargo_alvo, mat_final, instrucao_tema,
                         tipo, formato_alvo, contexto_da_web, motor_escolhido
                     )
 
                     try:
-                        # ROTEAMENTO DE MOTOR DE IA
                         if "Groq" in motor_escolhido:
                             resposta = client_groq.chat.completions.create(
                                 messages=[{"role": "user", "content": prompt}],
@@ -468,7 +485,6 @@ else:
                         else:
                             st.error(f"Erro na geração: {e}")
 
-    # --- RESOLUÇÃO ---
     if st.session_state.bateria_atual:
         st.write("---")
         st.subheader("🎯 Caderno de Prova")
@@ -485,7 +501,6 @@ else:
                 alts = json.loads(q_alt) if q_alt else {}
                 tags_list = json.loads(q_tags) if q_tags else []
                 
-                # Mapping de dificuldade para badge
                 dif_label = ["Muito Fácil", "Fácil", "Médio", "Difícil", "Muito Difícil"][min(q_dif - 1, 4)] if q_dif else "Médio"
                 dif_classe = "dif-facil" if q_dif <= 2 else "dif-medio" if q_dif == 3 else "dif-dificil"
                 
@@ -557,4 +572,3 @@ else:
                                 st.rerun()
                             else:
                                 st.warning("Selecione uma opção.")
-
