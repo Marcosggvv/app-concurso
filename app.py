@@ -505,7 +505,7 @@ else:
                     if "Inédita" in q_fonte and "Reais" in tipo:
                         st.error(f"⚠️ A inteligência artificial não localizou uma prova original. A questão foi forjada no estilo da banca.")
                     
-                    col_info, col_dif = st.columns([4, 1]
+                    col_info, col_dif = st.columns([4, 1])
                     with col_info:
                         st.caption(f"**Item {i+1}** | 📚 {q_mat} | 🏷️ **Origem:** {q_fonte}")
                     with col_dif:
@@ -557,3 +557,4 @@ else:
                                 st.rerun()
                             else:
                                 st.warning("Selecione uma opção.")
+
