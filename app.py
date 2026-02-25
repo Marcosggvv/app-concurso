@@ -13,7 +13,7 @@ from openai import OpenAI
 from duckduckgo_search import DDGS
 
 # =========================================================
-# CONFIGURAÇÃO GLOBAL
+# CONFIGURAÇÃO GLOBAL E ESTILO
 # =========================================================
 st.set_page_config(
     page_title="Plataforma de Alta Performance",
@@ -21,7 +21,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ----------------- Estilos -----------------
 st.markdown(
     """
     <style>
@@ -38,7 +37,6 @@ st.markdown(
     .dif-facil   { background-color: #d4edda; color: #155724; }
     .dif-medio   { background-color: #fff3cd; color: #856404; }
     .dif-dificil { background-color: #f8d7da; color: #721c24; }
-    .banca-info  { background-color: #e7f3ff; border-left: 4px solid #0066cc; padding: 12px; border-radius: 5px; margin-bottom: 15px; }
     .tipo-badge  { display: inline-block; padding: 4px 10px; border-radius: 15px; font-size: 11px; font-weight: bold; margin-right: 5px; }
     .tipo-inedita { background-color: #ffd700; color: #333; }
     .tipo-real    { background-color: #87ceeb; color: #000; }
@@ -51,7 +49,7 @@ st.markdown(
 )
 
 # =========================================================
-# CONSTANTES E PERFIS (resumidos)
+# CONSTANTES DE PERFIL
 # =========================================================
 PERFIL_BANCAS = {
     "Cebraspe": {
@@ -64,7 +62,6 @@ PERFIL_BANCAS = {
         "quantidade_alternativas": 2,
         "estilo_enunciado": "objetivo, assertivo, com pegadinhas sutis",
         "dificuldade_base": 4,
-        "sites_busca": ["cebraspe.org.br", "tecconcursos.com.br", "qconcursos.com", "estrategiaconcursos.com.br"],
     },
     "FCC": {
         "formatos": ["Múltipla Escolha (A a E)"],
@@ -76,7 +73,6 @@ PERFIL_BANCAS = {
         "quantidade_alternativas": 5,
         "estilo_enunciado": "contextualizado com caso concreto",
         "dificuldade_base": 3,
-        "sites_busca": ["fcc.org.br", "tecconcursos.com.br", "qconcursos.com"],
     },
     "Vunesp": {
         "formatos": ["Múltipla Escolha (A a E)"],
@@ -88,7 +84,6 @@ PERFIL_BANCAS = {
         "quantidade_alternativas": 5,
         "estilo_enunciado": "descritivo com situação fática",
         "dificuldade_base": 3,
-        "sites_busca": ["vunesp.com.br", "tecconcursos.com.br", "qconcursos.com"],
     },
 }
 
@@ -111,7 +106,7 @@ PERFIL_CARGO_DIFICULDADE = {
             "prisão domiciliar e entendimento do STJ"
         ],
     },
-    "Delegado": {  # fallback genérico
+    "Delegado": {
         "nível": 5, "descrição": "Muito Difícil — Nível Magistratura",
         "exige": ["CPP, CP, legislação penal especial", "jurisprudência STF/STJ atualizada"],
         "estilo_questao": ["caso concreto com múltiplos institutos", "jurisprudência recente"],
@@ -119,14 +114,8 @@ PERFIL_CARGO_DIFICULDADE = {
     },
     "Juiz de Direito": {
         "nível": 5, "descrição": "Muito Difícil — Nível Magistratura",
-        "exige": [
-            "processo civil e penal avançado",
-            "precedentes e controle de constitucionalidade"
-        ],
-        "estilo_questao": [
-            "múltiplos recursos/incidentes",
-            "conflito normativo solucionado pelo STF"
-        ],
+        "exige": ["processo civil e penal avançado", "precedentes e controle de constitucionalidade"],
+        "estilo_questao": ["múltiplos recursos/incidentes", "conflito normativo solucionado pelo STF"],
         "exemplos_temas_avancados": ["IRDR", "tutelas de urgência/evidência"]
     },
     "Analista": {
@@ -138,7 +127,7 @@ PERFIL_CARGO_DIFICULDADE = {
 }
 
 # =========================================================
-# CONEXÃO COM MODELOS
+# CLIENTES DE MODELO
 # =========================================================
 try:
     client_groq = Groq(api_key=st.secrets["GROQ_API_KEY"])
@@ -173,7 +162,8 @@ def iniciar_conexao():
             hash_questao TEXT DEFAULT '',
             subtema TEXT DEFAULT '',
             juris_citada TEXT DEFAULT '',
-            validado INTEGER DEFAULT 0
+            validado INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT ''
         )
     """)
     cur.execute("""
@@ -282,14 +272,28 @@ def obter_perfil_banca(banca_nome: str) -> Dict[str, Any]:
         "quantidade_alternativas": 5,
         "estilo_enunciado": "padrão",
         "dificuldade_base": 3,
-        "sites_busca": ["tecconcursos.com.br", "qconcursos.com"],
     }
 
 def sanitize_text(txt: str, max_chars: int) -> str:
     return re.sub(r'\s+', ' ', txt or '')[:max_chars]
 
+# Pequena impressão digital de texto para reduzir repetição de moldes
+def fingerprint(text: str) -> str:
+    tokens = re.findall(r'\w+', text.lower())
+    tokens = [t for t in tokens if len(t) > 3]
+    tokens = tokens[:80]
+    return hashlib.md5(" ".join(tokens).encode()).hexdigest()
+
+def similar(a: str, b: str, threshold: float = 0.35) -> bool:
+    sa = set(re.findall(r'\w+', a.lower()))
+    sb = set(re.findall(r'\w+', b.lower()))
+    if not sa or not sb:
+        return False
+    j = len(sa & sb) / len(sa | sb)
+    return j >= threshold
+
 # =========================================================
-# CACHE DE BUSCA WEB
+# CACHE DE BUSCA
 # =========================================================
 def get_cache(chave: str, max_age_seconds: int = 86400) -> Optional[str]:
     c.execute("SELECT conteudo, criado_em FROM cache_busca WHERE chave = ?", (chave,))
@@ -356,7 +360,7 @@ def pesquisar_padrao_banca_cargo(banca, cargo, concurso):
 def pesquisar_conteudo_programatico_especifico(cargo, concurso, materia):
     queries = [
         f'"{concurso}" conteúdo programático "{materia}" edital tópicos cobrados',
-        f'"{cargo}" "{materia}" temas mais cobrados concurso público 2022 2023 2024',
+        f'"{cargo}" "{materia}" temas mais cobiados concurso público 2022 2023 2024',
         f'"{concurso}" edital "{materia}" itens exigidos estudo',
     ]
     return buscar_ddg(queries, max_res=4, max_chars=3000, cache_prefix="edital")
@@ -391,7 +395,7 @@ FORMATO: Certo/Errado
         instr_formato = """
 FORMATO: Múltipla Escolha (A-D)
 - Gabarito: letra A-D
-- Distratores: um por exceção legal, um por entendimento superado, um por requisito faltante
+- Distratores: exceção legal; requisito faltante; entendimento superado
 """
         exemplo_alts = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."}'
     else:
@@ -402,16 +406,25 @@ FORMATO: Múltipla Escolha (A-E)
 """
         exemplo_alts = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
 
+    rubricas_variação = """
+- Varie início do enunciado (não use sempre "Considerando que", "No caso", "Em relação").
+- Use 2-3 institutos em conflito e mencione pelo menos um precedente (STF/STJ, ano, tese).
+- Se algum item ficar raso, regenere internamente e só devolva os válidos.
+- Não reutilize moldes dentro do lote; altere protagonistas, órgãos, datas, números de artigos.
+"""
+
     return f"""
 Você é um elaborador de questões de alto nível para concursos.
 
-OBRIGAÇÕES:
-1) Enunciado com caso concreto contendo 2-3 institutos em conflito. Proibido definição básica.
+OBRIGAÇÕES DURAS:
+1) Enunciado com caso concreto (2-3 institutos em conflito). Proibido definição básica.
 2) Cite ao menos uma jurisprudência STF/STJ (ano + tese) na explicação.
 3) Distratores plausíveis e tecnicamente sofisticados. Varie estruturas frasais.
 4) Nível {nivel}/5, padrão do cargo {cargo} e banca {banca}.
 5) Não reutilize moldes de enunciado dentro do mesmo lote.
-6) Se qualquer questão violar regras, regenere internamente e só retorne válidas.
+6) Gere internamente mais questões e retorne somente as melhores e diversas.
+
+{rubricas_variação}
 
 CONCURSO: {concurso}
 CARGO: {cargo}
@@ -425,7 +438,7 @@ CONTEXTOS (resumidos):
 [PADRÃO BANCA] {contexto_padrao[:1000]}
 [CONTEÚDO EDITAL] {contexto_edital[:1000]}
 
-Gere {qtd} questões, mas crie internamente mais e retorne somente as melhores (diversas).
+Gere {qtd} questões, mas produza internamente mais e devolva apenas as melhores.
 Responda APENAS com JSON válido:
 
 {{
@@ -459,7 +472,7 @@ def prompt_questoes_reais(qtd, banca, cargo, concurso, materia, tema, contexto_r
         exemplo_alts = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
 
     return f"""
-Você é um preparador especializado. Transcreva ou reconstrua em padrão real {qtd} questões de provas anteriores da banca {banca} para o cargo {cargo}. Se faltar contexto, crie no padrão real.
+Você é um preparador especializado. Transcreva ou reconstrua em padrão real {qtd} questões da banca {banca} para o cargo {cargo}. Se faltar contexto, crie no padrão real.
 
 CONCURSO: {concurso}
 MATÉRIA: {materia} | TEMA: {tema}
@@ -473,6 +486,7 @@ Regras:
 - Campo gabarito: apenas letra A-E ou Certo/Errado, sem texto extra.
 - Preserve o padrão de dificuldade e estilo da banca.
 - Explicação com lei/jurisprudência/doutrina (>=5 linhas).
+- Varie moldes; não repita introduções; altere casos e datas.
 
 Responda somente com JSON:
 
@@ -496,24 +510,27 @@ Responda somente com JSON:
 """
 
 # =========================================================
-# VALIDAÇÃO E RANQUEAMENTO
+# VALIDAÇÃO, RANQUEAMENTO E DEDUP
 # =========================================================
 def validar_questao(q: Dict[str, Any]) -> bool:
     enun = q.get("enunciado", "")
     gab = normalizar_gabarito(q.get("gabarito", ""))
     alts = q.get("alternativas", {})
     exp = q.get("explicacao", "")
-    if not enun or len(enun) < 80:
+
+    if not enun or len(enun) < 120:  # mais rigor
         return False
     if gab not in ["A", "B", "C", "D", "E", "CERTO", "ERRADO"]:
         return False
-    if isinstance(alts, dict):
-        if "Certo/Errado" not in str(q.get("formato", "")):
-            if len(alts.keys()) < 2:
-                return False
-            if any(not v or len(str(v).strip()) < 5 for v in alts.values()):
-                return False
+    if isinstance(alts, dict) and "Certo/Errado" not in str(q.get("formato", "")):
+        if len(alts.keys()) < 2:
+            return False
+        if any(not v or len(str(v).strip()) < 8 for v in alts.values()):
+            return False
     if not re.search(r'(STF|STJ|art\.|Lei|Código)', exp, flags=re.IGNORECASE):
+        return False
+    # exigir citação breve na explicação
+    if len(exp.strip()) < 200:
         return False
     return True
 
@@ -522,28 +539,34 @@ def score_questao(q: Dict[str, Any]) -> float:
     enun = q.get("enunciado", "")
     exp = q.get("explicacao", "")
     alts = q.get("alternativas", {})
-    score += min(len(enun) / 200.0, 4)           # comprimento enunciado
-    score += min(len(exp) / 300.0, 3)           # comprimento explicação
-    score += len([k for k in alts.keys()]) * 0.2
+    score += min(len(enun) / 220.0, 4.5)           # enunciado robusto
+    score += min(len(exp) / 320.0, 3.5)           # explicação robusta
+    score += len([k for k in alts.keys()]) * 0.3
     score += 1 if re.search(r'STF|STJ', exp, re.IGNORECASE) else 0
-    score += 0.5 if re.search(r'exceç|prazo|competên', " ".join(alts.values()), re.IGNORECASE) else 0
+    score += 0.6 if re.search(r'exceç|prazo|competên', " ".join(alts.values()), re.IGNORECASE) else 0
     return score
 
-def dedup_lista(lista: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    vistos = set()
+def dedup_lista(lista: List[Dict[str, Any]], materia: str, tema: str, banca: str, cargo: str) -> List[Dict[str, Any]]:
+    vistos = {}
     res = []
     for q in lista:
+        gab_norm = normalizar_gabarito(q.get("gabarito", ""))
         h = gerar_hash_questao(
             q.get("enunciado", ""),
-            normalizar_gabarito(q.get("gabarito", "")),
-            q.get("materia", ""),
-            q.get("tema", ""),
-            q.get("banca", ""),
-            q.get("cargo", "")
+            gab_norm,
+            materia,
+            tema,
+            banca,
+            cargo
         )
+        fp = fingerprint(q.get("enunciado", ""))
+        # checagem por hash exato
         if h in vistos:
             continue
-        vistos.add(h)
+        # checagem por similaridade com enunciados já retidos
+        if any(similar(q.get("enunciado", ""), v) for v in vistos.values()):
+            continue
+        vistos[h] = fp
         q["hash_calc"] = h
         res.append(q)
     return res
@@ -575,7 +598,7 @@ def chamar_modelo(messages: List[Dict[str, str]], modelo: str, temperature: floa
 
 def gerar_questoes(qtd, origem, banca, cargo, concurso, materia, tema, usar_web, modelo_escolhido):
     # gerar mais para filtrar
-    qtd_interno = max(qtd * 2, qtd + 2)
+    qtd_interno = max(qtd * 3, qtd + 4)
 
     contexto_juris = contexto_padrao = contexto_edital = contexto_reais = ""
     if usar_web:
@@ -585,13 +608,17 @@ def gerar_questoes(qtd, origem, banca, cargo, concurso, materia, tema, usar_web,
             contexto_edital = pesquisar_conteudo_programatico_especifico(cargo, concurso, materia)
         else:
             contexto_reais = pesquisar_questoes_reais_banca(banca, cargo, concurso, materia, tema, qtd_interno)
+    else:
+        contexto_juris = f"Use jurisprudência consolidada de {materia} para {cargo}."
+        contexto_padrao = f"Padrão histórico conhecido da banca {banca}."
+        contexto_edital = f"Conteúdo programático padrão de {cargo}."
 
     if origem == "Ineditas":
         prompt = prompt_questoes_ineditas(qtd_interno, banca, cargo, concurso, materia, tema, contexto_juris, contexto_padrao, contexto_edital)
-        temp = 0.75
+        temp = 0.78
     else:
         prompt = prompt_questoes_reais(qtd_interno, banca, cargo, concurso, materia, tema, contexto_reais)
-        temp = 0.15
+        temp = 0.18
 
     messages = [
         {"role": "system", "content": "Você gera APENAS JSON válido. Siga o esquema fornecido. Não inclua markdown."},
@@ -613,11 +640,13 @@ def gerar_questoes(qtd, origem, banca, cargo, concurso, materia, tema, usar_web,
         q["banca"] = banca
         q["cargo"] = cargo
 
-    # Dedup e validação
-    lista = dedup_lista(lista)
+    # Dedup forte (hash + similaridade)
+    lista = dedup_lista(lista, materia, tema, banca, cargo)
+    # Validação
     lista_validas = [q for q in lista if validar_questao(q)]
     # Ranqueia
     lista_validas.sort(key=score_questao, reverse=True)
+    # Retorna top qtd
     return lista_validas[:qtd], len(lista), len(lista_validas)
 
 # =========================================================
@@ -627,6 +656,7 @@ if "usuario_atual" not in st.session_state: st.session_state.usuario_atual = Non
 if "bateria_atual" not in st.session_state: st.session_state.bateria_atual = []
 if "edital_ativo" not in st.session_state: st.session_state.edital_ativo = None
 if "debug_mode" not in st.session_state: st.session_state.debug_mode = False
+if "tema_cooldown" not in st.session_state: st.session_state.tema_cooldown = []
 
 # =========================================================
 # SIDEBAR
@@ -713,6 +743,8 @@ Responda somente com JSON: {{"materias": ["Disciplina 1", "Disciplina 2"]}}.
 Texto: {texto_colado[:12000]}
 """
                     try:
+                        if not client_groq:
+                            raise RuntimeError("Configure GROQ_API_KEY")
                         resp = client_groq.chat.completions.create(
                             messages=[{"role": "user", "content": prompt_edit}],
                             model="llama-3.3-70b-versatile",
@@ -823,11 +855,17 @@ with st.container(border=True):
 
     if st.button("🚀 Forjar Bateria", type="primary", use_container_width=True):
         mat_final = (random.choice(e["materias"]) if e and mat_sel == "Aleatório" else mat_sel)
-        tema_final = (
-            f"Tema mais cobrado e complexo de {mat_final} para {cargo_alvo}"
-            if tema_sel.lower() == "aleatório" else tema_sel
-        )
 
+        # rotação de temas para evitar repetição
+        if tema_sel.lower() == "aleatório":
+            if st.session_state.tema_cooldown:
+                pool = [m for m in e["materias"] if m not in st.session_state.tema_cooldown[-3:]]
+                mat_final = random.choice(pool) if pool else mat_final
+            tema_final = f"Tema mais cobrado e complexo de {mat_final} para {cargo_alvo}"
+        else:
+            tema_final = tema_sel
+
+        # Modo revisão
         if "Revisão" in tipo:
             st.info("🔄 Resgatando questões do banco local...")
             c.execute(
@@ -850,7 +888,7 @@ with st.container(border=True):
             progresso = st.progress(0, text="Preparando...")
 
             try:
-                progresso.progress(20, text="🔍 Buscando contexto..." if usar_web else "Contexto padrão...")
+                progresso.progress(25, text="🔍 Buscando contexto..." if usar_web else "Contexto padrão...")
                 lista, total_bruto, total_validas = gerar_questoes(
                     qtd=qtd,
                     origem=origem,
@@ -862,7 +900,7 @@ with st.container(border=True):
                     usar_web=usar_web,
                     modelo_escolhido=modelo_flag
                 )
-                progresso.progress(80, text="💾 Salvando no banco...")
+                progresso.progress(75, text="💾 Salvando no banco...")
                 novas_ids, duplicatas = [], 0
                 for q in lista:
                     gab_norm = normalizar_gabarito(q.get("gabarito", ""))
@@ -879,8 +917,8 @@ with st.container(border=True):
                         """
                         INSERT INTO questoes
                         (banca, cargo, materia, tema, enunciado, alternativas, gabarito, explicacao, tipo, fonte,
-                         dificuldade, tags, formato_questao, eh_real, ano_prova, hash_questao, subtema, juris_citada, validado)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                         dificuldade, tags, formato_questao, eh_real, ano_prova, hash_questao, subtema, juris_citada, validado, created_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """,
                         (
                             banca_alvo, cargo_alvo, mat_final, tema_final, q.get("enunciado", ""), alternativas,
@@ -894,12 +932,14 @@ with st.container(border=True):
                             hash_q,
                             q.get("subtema", ""),
                             q.get("juris_citada", ""),
-                            1  # validado pelas regras locais
+                            1,  # validado
+                            datetime.now().isoformat()
                         )
                     )
                     novas_ids.append(c.lastrowid)
                 conn.commit()
                 st.session_state.bateria_atual = novas_ids
+                st.session_state.tema_cooldown.append(mat_final)
                 progresso.progress(100, text="✅ Concluído!")
                 st.success(f"Geradas {len(novas_ids)} questões (brutas: {total_bruto}, válidas: {total_validas}, descartadas como duplicatas: {duplicatas}).")
                 st.rerun()
