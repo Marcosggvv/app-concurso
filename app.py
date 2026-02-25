@@ -557,12 +557,14 @@ def score_questao(q):
 
     return score
 
-def dedup_lista(lista: List[Dict[str, Any]], materia: str, tema: str, banca: str, cargo: str) -> List[Dict[str, Any]]:
-    vistos = {}
-    res = []
+def dedup_lista(lista, materia, tema, banca, cargo):
+    vistos_hash = set()
+    vistos_fp = []
+    resultado = []
+
     for q in lista:
         gab_norm = normalizar_gabarito(q.get("gabarito", ""))
-        h = gerar_hash_questao(
+        hash_q = gerar_hash_questao(
             q.get("enunciado", ""),
             gab_norm,
             materia,
@@ -570,17 +572,24 @@ def dedup_lista(lista: List[Dict[str, Any]], materia: str, tema: str, banca: str
             banca,
             cargo
         )
+
         fp = fingerprint(q.get("enunciado", ""))
-        # checagem por hash exato
-        if h in vistos:
+
+        if hash_q in vistos_hash:
             continue
-        # checagem por similaridade com enunciados já retidos
-        if any(similar(q.get("enunciado", ""), v) for v in vistos.values()):
+
+        if any(similar(fp, fprev, 0.75) for fprev in vistos_fp):
             continue
-        vistos[h] = fp
-        q["hash_calc"] = h
-        res.append(q)
-    return res
+
+        vistos_hash.add(hash_q)
+        vistos_fp.append(fp)
+
+        q["hash_calc"] = hash_q
+        q["fingerprint_calc"] = fp
+
+        resultado.append(q)
+
+    return resultado
 
 # =========================================================
 # LLM CALL
@@ -1072,6 +1081,7 @@ if st.session_state.bateria_atual:
                         st.rerun()
                     else:
                         st.warning("Selecione uma opção antes de confirmar.")
+
 
 
 
