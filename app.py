@@ -514,28 +514,29 @@ Responda somente com JSON:
 # =========================================================
 # VALIDAÇÃO, RANQUEAMENTO E DEDUP
 # =========================================================
-def validar_questao(q: Dict[str, Any]) -> bool:
+def validar_questao(q):
     enun = q.get("enunciado", "")
     gab = normalizar_gabarito(q.get("gabarito", ""))
     alts = q.get("alternativas", {})
     exp = q.get("explicacao", "")
 
-    if not enun or len(enun) < 120:  # mais rigor
+    if not enun or len(enun) < 180:
         return False
+
     if gab not in ["A", "B", "C", "D", "E", "CERTO", "ERRADO"]:
         return False
-    if isinstance(alts, dict) and "Certo/Errado" not in str(q.get("formato", "")):
-        if len(alts.keys()) < 2:
-            return False
-        if any(not v or len(str(v).strip()) < 8 for v in alts.values()):
-            return False
-    if not re.search(r'(STF|STJ|art\.|Lei|Código)', exp, flags=re.IGNORECASE):
-        return False
-    # exigir citação breve na explicação
-    if len(exp.strip()) < 200:
-        return False
-    return True
 
+    if isinstance(alts, dict) and len(alts) < 2:
+        return False
+
+    if len(exp.strip()) < 300:
+        return False
+
+    # Exigir número de processo ou Tema
+    if not re.search(r'(Tema\s?\d+|RE\s?\d+|HC\s?\d+|Informativo\s?\d+)', exp, re.IGNORECASE):
+        return False
+
+    return True
 def score_questao(q: Dict[str, Any]) -> float:
     score = 0.0
     enun = q.get("enunciado", "")
@@ -1063,4 +1064,5 @@ if st.session_state.bateria_atual:
                         st.rerun()
                     else:
                         st.warning("Selecione uma opção antes de confirmar.")
+
 
