@@ -7,7 +7,7 @@ import random
 import re
 import hashlib
 import time
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from groq import Groq
 from openai import OpenAI
 from duckduckgo_search import DDGS
@@ -203,26 +203,21 @@ def normalizar_gabarito(gabarito_raw: Any) -> str:
     if not gabarito_raw:
         return ""
     g = str(gabarito_raw).strip().upper()
-
     if re.search(r'\bCERTO\b', g):
         return "CERTO"
     if re.search(r'\bERRADO\b', g):
         return "ERRADO"
-
     match = re.match(r'^([A-E])[^A-Z]', g)
     if match:
         return match.group(1)
     if len(g) == 1 and g in "ABCDE":
         return g
-
     match = re.search(r'\b(?:LETRA|ALT(?:ERNATIVA)?|OPÇ?AO)\s+([A-E])\b', g)
     if match:
         return match.group(1)
-
     match = re.search(r'\b([A-E])\b', g)
     if match:
         return match.group(1)
-
     return g
 
 def extrair_letra_opcao(opcao_texto: Any, tem_alternativas: bool) -> str:
@@ -277,7 +272,6 @@ def obter_perfil_banca(banca_nome: str) -> Dict[str, Any]:
 def sanitize_text(txt: str, max_chars: int) -> str:
     return re.sub(r'\s+', ' ', txt or '')[:max_chars]
 
-# Pequena impressão digital de texto para reduzir repetição de moldes
 def fingerprint(text: str) -> str:
     tokens = re.findall(r'\w+', text.lower())
     tokens = [t for t in tokens if len(t) > 3]
@@ -385,45 +379,29 @@ def prompt_questoes_ineditas(qtd, banca, cargo, concurso, materia, tema, context
     nivel = perfil_cargo.get("nível", 3)
 
     if "Certo/Errado" in formato:
-        instr_formato = """
-FORMATO: Certo/Errado
-- Campo "gabarito": apenas "Certo" ou "Errado"
-- Campo "alternativas": {}
-"""
         exemplo_alts = '"alternativas": {}'
     elif "A a D" in formato:
-        instr_formato = """
-FORMATO: Múltipla Escolha (A-D)
-- Gabarito: letra A-D
-- Distratores: exceção legal; requisito faltante; entendimento superado
-"""
         exemplo_alts = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."}'
     else:
-        instr_formato = """
-FORMATO: Múltipla Escolha (A-E)
-- Gabarito: letra A-E
-- Distratores: exceção legal; entendimento superado; prazo/competência errada; literalidade x interpretação atual; requisito faltante
-"""
         exemplo_alts = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
 
     rubricas_variação = """
-- Varie início do enunciado (não use sempre "Considerando que", "No caso", "Em relação").
-- Use 2-3 institutos em conflito e mencione pelo menos um precedente (STF/STJ, ano, tese).
-- Se algum item ficar raso, regenere internamente e só devolva os válidos.
-- Não reutilize moldes dentro do lote; altere protagonistas, órgãos, datas, números de artigos.
+- Varie início do enunciado; não repita moldes no lote.
+- Use 2-3 institutos em conflito e cite um precedente STF/STJ (ano, tese) na explicação.
+- Distratores: exceção legal; requisito faltante; entendimento superado; prazo/competência errada; literalidade vs interpretação.
+- Gere internamente mais itens e devolva apenas os diversos e válidos.
 """
 
     return f"""
-Você é um elaborador de questões de alto nível para concursos.
+Você é um elaborador de questões de alto nível.
 
-OBRIGAÇÕES DURAS:
-1) Enunciado com caso concreto (2-3 institutos em conflito). Proibido definição básica.
-2) Cite ao menos uma jurisprudência STF/STJ (ano + tese) na explicação.
-3) Distratores plausíveis e tecnicamente sofisticados. Varie estruturas frasais.
+OBRIGAÇÕES:
+1) Caso concreto com 2-3 institutos em conflito (proibido definição básica).
+2) Cite jurisprudência STF/STJ (ano + tese) na explicação.
+3) Distratores plausíveis e sofisticados; variação frasal.
 4) Nível {nivel}/5, padrão do cargo {cargo} e banca {banca}.
-5) Não reutilize moldes de enunciado dentro do mesmo lote.
-6) Gere internamente mais questões e retorne somente as melhores e diversas.
-
+5) Não reutilizar moldes de enunciado no lote.
+6) Se algo ficar raso, regenere internamente e só devolva válidos.
 {rubricas_variação}
 
 CONCURSO: {concurso}
@@ -438,7 +416,7 @@ CONTEXTOS (resumidos):
 [PADRÃO BANCA] {contexto_padrao[:1000]}
 [CONTEÚDO EDITAL] {contexto_edital[:1000]}
 
-Gere {qtd} questões, mas produza internamente mais e devolva apenas as melhores.
+Gere {qtd} questões (produza mais internamente e filtre).
 Responda APENAS com JSON válido:
 
 {{
@@ -483,10 +461,10 @@ CONTEXTO DE PROVAS REAIS (resumido):
 {contexto_reais[:4000]}
 
 Regras:
-- Campo gabarito: apenas letra A-E ou Certo/Errado, sem texto extra.
-- Preserve o padrão de dificuldade e estilo da banca.
+- Gabarito: apenas letra A-E ou Certo/Errado, sem texto extra.
+- Preserve padrão de dificuldade e estilo da banca.
 - Explicação com lei/jurisprudência/doutrina (>=5 linhas).
-- Varie moldes; não repita introduções; altere casos e datas.
+- Varie moldes; não repita introduções.
 
 Responda somente com JSON:
 
@@ -517,8 +495,7 @@ def validar_questao(q: Dict[str, Any]) -> bool:
     gab = normalizar_gabarito(q.get("gabarito", ""))
     alts = q.get("alternativas", {})
     exp = q.get("explicacao", "")
-
-    if not enun or len(enun) < 120:  # mais rigor
+    if not enun or len(enun) < 120:
         return False
     if gab not in ["A", "B", "C", "D", "E", "CERTO", "ERRADO"]:
         return False
@@ -529,7 +506,6 @@ def validar_questao(q: Dict[str, Any]) -> bool:
             return False
     if not re.search(r'(STF|STJ|art\.|Lei|Código)', exp, flags=re.IGNORECASE):
         return False
-    # exigir citação breve na explicação
     if len(exp.strip()) < 200:
         return False
     return True
@@ -539,8 +515,8 @@ def score_questao(q: Dict[str, Any]) -> float:
     enun = q.get("enunciado", "")
     exp = q.get("explicacao", "")
     alts = q.get("alternativas", {})
-    score += min(len(enun) / 220.0, 4.5)           # enunciado robusto
-    score += min(len(exp) / 320.0, 3.5)           # explicação robusta
+    score += min(len(enun) / 220.0, 4.5)
+    score += min(len(exp) / 320.0, 3.5)
     score += len([k for k in alts.keys()]) * 0.3
     score += 1 if re.search(r'STF|STJ', exp, re.IGNORECASE) else 0
     score += 0.6 if re.search(r'exceç|prazo|competên', " ".join(alts.values()), re.IGNORECASE) else 0
@@ -551,19 +527,10 @@ def dedup_lista(lista: List[Dict[str, Any]], materia: str, tema: str, banca: str
     res = []
     for q in lista:
         gab_norm = normalizar_gabarito(q.get("gabarito", ""))
-        h = gerar_hash_questao(
-            q.get("enunciado", ""),
-            gab_norm,
-            materia,
-            tema,
-            banca,
-            cargo
-        )
+        h = gerar_hash_questao(q.get("enunciado", ""), gab_norm, materia, tema, banca, cargo)
         fp = fingerprint(q.get("enunciado", ""))
-        # checagem por hash exato
         if h in vistos:
             continue
-        # checagem por similaridade com enunciados já retidos
         if any(similar(q.get("enunciado", ""), v) for v in vistos.values()):
             continue
         vistos[h] = fp
@@ -597,7 +564,6 @@ def chamar_modelo(messages: List[Dict[str, str]], modelo: str, temperature: floa
         )
 
 def gerar_questoes(qtd, origem, banca, cargo, concurso, materia, tema, usar_web, modelo_escolhido):
-    # gerar mais para filtrar
     qtd_interno = max(qtd * 3, qtd + 4)
 
     contexto_juris = contexto_padrao = contexto_edital = contexto_reais = ""
@@ -633,20 +599,15 @@ def gerar_questoes(qtd, origem, banca, cargo, concurso, materia, tema, usar_web,
         raise RuntimeError(f"Falha ao parsear JSON: {e}")
 
     lista = dados.get("questoes", []) if isinstance(dados, dict) else (dados if isinstance(dados, list) else [])
-    # Completa metadados
     for q in lista:
         q["materia"] = materia
         q["tema"] = tema
         q["banca"] = banca
         q["cargo"] = cargo
 
-    # Dedup forte (hash + similaridade)
     lista = dedup_lista(lista, materia, tema, banca, cargo)
-    # Validação
     lista_validas = [q for q in lista if validar_questao(q)]
-    # Ranqueia
     lista_validas.sort(key=score_questao, reverse=True)
-    # Retorna top qtd
     return lista_validas[:qtd], len(lista), len(lista_validas)
 
 # =========================================================
@@ -792,7 +753,6 @@ if not st.session_state.usuario_atual:
 st.title(f"📚 Plataforma — {st.session_state.usuario_atual}")
 st.write("---")
 
-# Métricas
 df_resp = pd.read_sql_query("SELECT * FROM respostas WHERE usuario = ?", conn, params=(st.session_state.usuario_atual,))
 total_resp = len(df_resp)
 acertos = int(df_resp["acertou"].sum()) if total_resp > 0 else 0
@@ -856,16 +816,16 @@ with st.container(border=True):
     if st.button("🚀 Forjar Bateria", type="primary", use_container_width=True):
         mat_final = (random.choice(e["materias"]) if e and mat_sel == "Aleatório" else mat_sel)
 
-        # rotação de temas para evitar repetição
+        # rotação/aleatório de tema com proteção quando não há edital
         if tema_sel.lower() == "aleatório":
-            if st.session_state.tema_cooldown:
+            if e and st.session_state.tema_cooldown:
                 pool = [m for m in e["materias"] if m not in st.session_state.tema_cooldown[-3:]]
-                mat_final = random.choice(pool) if pool else mat_final
+                if pool:
+                    mat_final = random.choice(pool)
             tema_final = f"Tema mais cobrado e complexo de {mat_final} para {cargo_alvo}"
         else:
             tema_final = tema_sel
 
-        # Modo revisão
         if "Revisão" in tipo:
             st.info("🔄 Resgatando questões do banco local...")
             c.execute(
@@ -932,14 +892,15 @@ with st.container(border=True):
                             hash_q,
                             q.get("subtema", ""),
                             q.get("juris_citada", ""),
-                            1,  # validado
+                            1,
                             datetime.now().isoformat()
                         )
                     )
                     novas_ids.append(c.lastrowid)
                 conn.commit()
                 st.session_state.bateria_atual = novas_ids
-                st.session_state.tema_cooldown.append(mat_final)
+                if e:
+                    st.session_state.tema_cooldown.append(mat_final)
                 progresso.progress(100, text="✅ Concluído!")
                 st.success(f"Geradas {len(novas_ids)} questões (brutas: {total_bruto}, válidas: {total_validas}, descartadas como duplicatas: {duplicatas}).")
                 st.rerun()
