@@ -537,16 +537,24 @@ def validar_questao(q):
         return False
 
     return True
-def score_questao(q: Dict[str, Any]) -> float:
+def score_questao(q):
     score = 0.0
     enun = q.get("enunciado", "")
     exp = q.get("explicacao", "")
     alts = q.get("alternativas", {})
-    score += min(len(enun) / 220.0, 4.5)           # enunciado robusto
-    score += min(len(exp) / 320.0, 3.5)           # explicação robusta
-    score += len([k for k in alts.keys()]) * 0.3
-    score += 1 if re.search(r'STF|STJ', exp, re.IGNORECASE) else 0
-    score += 0.6 if re.search(r'exceç|prazo|competên', " ".join(alts.values()), re.IGNORECASE) else 0
+
+    score += min(len(enun) / 250.0, 4.0)
+    score += min(len(exp) / 400.0, 4.0)
+
+    if re.search(r'(Tema\s?\d+|RE\s?\d+|HC\s?\d+)', exp):
+        score += 1.5
+
+    if re.search(r'exceç|prazo|competên', " ".join(alts.values()), re.IGNORECASE):
+        score += 1
+
+    if re.search(r'Considerando que|Em relação a|No caso apresentado', enun):
+        score -= 0.8
+
     return score
 
 def dedup_lista(lista: List[Dict[str, Any]], materia: str, tema: str, banca: str, cargo: str) -> List[Dict[str, Any]]:
@@ -1064,5 +1072,6 @@ if st.session_state.bateria_atual:
                         st.rerun()
                     else:
                         st.warning("Selecione uma opção antes de confirmar.")
+
 
 
