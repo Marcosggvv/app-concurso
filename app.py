@@ -151,21 +151,23 @@ def iniciar_conexao():
     cur = conn.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS usuarios (nome TEXT PRIMARY KEY)")
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS questoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            banca TEXT, cargo TEXT, materia TEXT, tema TEXT,
-            enunciado TEXT, alternativas TEXT, gabarito TEXT,
-            explicacao TEXT, tipo TEXT, fonte TEXT,
-            dificuldade INTEGER DEFAULT 3, tags TEXT DEFAULT '[]',
-            formato_questao TEXT DEFAULT 'Múltipla Escolha',
-            eh_real INTEGER DEFAULT 0, ano_prova INTEGER DEFAULT 0,
-            hash_questao TEXT DEFAULT '',
-            subtema TEXT DEFAULT '',
-            juris_citada TEXT DEFAULT '',
-            validado INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT ''
-        )
-    """)
+        cur.execute("""
+CREATE TABLE IF NOT EXISTS questoes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    banca TEXT, cargo TEXT, materia TEXT, tema TEXT,
+    enunciado TEXT, alternativas TEXT, gabarito TEXT,
+    explicacao TEXT, tipo TEXT, fonte TEXT,
+    dificuldade INTEGER DEFAULT 3, tags TEXT DEFAULT '[]',
+    formato_questao TEXT DEFAULT 'Múltipla Escolha',
+    eh_real INTEGER DEFAULT 0, ano_prova INTEGER DEFAULT 0,
+    hash_questao TEXT DEFAULT '',
+    fingerprint TEXT DEFAULT '',
+    subtema TEXT DEFAULT '',
+    juris_citada TEXT DEFAULT '',
+    validado INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT ''
+)
+""")
     cur.execute("""
         CREATE TABLE IF NOT EXISTS respostas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1061,3 +1063,4 @@ if st.session_state.bateria_atual:
                         st.rerun()
                     else:
                         st.warning("Selecione uma opção antes de confirmar.")
+
