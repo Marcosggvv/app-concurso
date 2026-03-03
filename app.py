@@ -5,10 +5,12 @@ from datetime import datetime
 import json
 import random
 import re
+import hashlib
+import time
+from typing import List, Dict, Any, Optional
 from groq import Groq
 from openai import OpenAI
 from duckduckgo_search import DDGS
-import hashlib
 
 # ================= CONFIGURAÇÃO VISUAL =================
 st.set_page_config(page_title="Plataforma de Alta Performance", layout="wide", initial_sidebar_state="expanded")
@@ -37,6 +39,20 @@ st.markdown("""
 
 # ================= PERFIL DETALHADO DE BANCAS =================
 PERFIL_BANCAS = {
+    "Consulpam": {
+        "formatos": ["Múltipla Escolha (A a D)", "Múltipla Escolha (A a E)"],
+        "caracteristicas": [
+            "foco extremo na literalidade da lei (lei seca)",
+            "questões diretas e sem grandes elaborações fáticas",
+            "cobrança de prazos, competências e exceções legais",
+            "enunciados curtos e alternância entre opções 'incorretas' e 'corretas'"
+        ],
+        "quantidade_alternativas": 4, # Prioritariamente A a D, mas pode variar
+        "estilo_enunciado": "objetivo, curto, pedindo a exceção ou a regra exata da lei",
+        "dificuldade_base": 2,
+        "sites_busca": ["consulpam.com.br", "tecconcursos.com.br", "qconcursos.com"],
+        "exemplo": "Para a banca CONSULPAM, use enunciados diretos. Foque na letra da lei, prazos e decorebas. Maioria das questões tem 4 alternativas (A a D)."
+    },
     "Cebraspe": {
         "formatos": ["Certo/Errado"],
         "caracteristicas": ["questões assertivas", "análise de jurisprudência", "interpretação de normas", "pegadinhas sutis"],
@@ -153,7 +169,7 @@ try:
 except Exception as e:
     st.error("Erro ao carregar as chaves de API. Verifique os Segredos no Streamlit.")
 
-# ================= AGENTE DE BUSCA AVANÇADO =================
+# ================= AGENTE DE BUSCA (SEQUENCIAL ANTI-CRASH) =================
 def pesquisar_questoes_reais_banca(banca, cargo, materia, tema, quantidade):
     try:
         ddgs = DDGS()
@@ -161,24 +177,21 @@ def pesquisar_questoes_reais_banca(banca, cargo, materia, tema, quantidade):
             f'"{banca}" "{cargo}" "{materia}" questão prova gabarito (site:tecconcursos.com.br OR site:qconcursos.com)',
             f'prova "{banca}" {cargo} {materia} "{tema}" (site:tecconcursos.com.br OR site:qconcursos.com)',
             f'"{banca}" {cargo} {materia} questão enunciado alternativas',
-            f'concurso público "{banca}" {cargo} resultado oficial gabarito {materia}',
         ]
         questoes_encontradas = []
         for query in queries:
             try:
-                resultados = ddgs.text(query, max_results=10)
+                resultados = ddgs.text(query, max_results=6)
                 for resultado in resultados:
                     texto = resultado.get('body', '')
-                    if any(palavra in texto.lower() for palavra in ['gabarito', 'alternativa', 'resposta correta', 'questão', 'prova', 'edital']):
+                    if any(palavra in texto.lower() for palavra in ['gabarito', 'alternativa', 'resposta correta', 'questão', 'prova']):
                         questoes_encontradas.append(texto)
-                        if len(questoes_encontradas) >= quantidade * 2:
-                            break
             except:
                 continue
             if len(questoes_encontradas) >= quantidade * 2:
                 break
         contexto = "\n---\n".join(questoes_encontradas[:quantidade * 3])
-        return contexto[:15000] if contexto else "Nenhuma questão real encontrada."
+        return contexto[:10000] if contexto else "Nenhuma questão real encontrada."
     except Exception as e:
         return "Busca de questões reais indisponível."
 
@@ -186,43 +199,21 @@ def pesquisar_jurisprudencia_banca(banca, cargo, materia):
     try:
         ddgs = DDGS()
         query = f'jurisprudência "{banca}" "{cargo}" "{materia}" STF STJ (site:stf.jus.br OR site:stj.jus.br OR site:tecconcursos.com.br)'
-        resultados = ddgs.text(query, max_results=8)
+        resultados = ddgs.text(query, max_results=5)
         contexto = "\n".join([f"- {r['body']}" for r in resultados])
-        return contexto[:8000] if contexto else "Jurisprudência insuficiente."
+        return contexto[:6000] if contexto else "Jurisprudência insuficiente."
     except Exception as e:
         return "Busca de jurisprudência indisponível."
 
 def pesquisar_estilo_questoes_banca(banca):
     try:
         ddgs = DDGS()
-        query = f'"{banca}" questões tipo estilo formato padrão (site:tecconcursos.com.br OR site:qconcursos.com OR site:youtube.com)'
-        resultados = ddgs.text(query, max_results=6)
+        query = f'"{banca}" questões tipo estilo formato padrão (site:tecconcursos.com.br OR site:qconcursos.com)'
+        resultados = ddgs.text(query, max_results=4)
         contexto = "\n".join([f"- {r['body']}" for r in resultados])
-        return contexto[:5000] if contexto else "Exemplos insuficientes."
+        return contexto[:4000] if contexto else "Exemplos insuficientes."
     except Exception as e:
         return "Busca de estilo indisponível."
-
-# ================= MIGRAÇÃO DO BANCO DE DADOS =================
-def migrar_banco_de_dados(conn):
-    c = conn.cursor()
-    try: c.execute("ALTER TABLE editais_salvos ADD COLUMN nivel_dificuldade INTEGER DEFAULT 3"); conn.commit()
-    except: pass
-    try: c.execute("ALTER TABLE editais_salvos ADD COLUMN formato_questoes TEXT DEFAULT '[]'"); conn.commit()
-    except: pass
-    try: c.execute("ALTER TABLE questoes ADD COLUMN dificuldade INTEGER DEFAULT 3"); conn.commit()
-    except: pass
-    try: c.execute("ALTER TABLE questoes ADD COLUMN tags TEXT DEFAULT '[]'"); conn.commit()
-    except: pass
-    try: c.execute("ALTER TABLE questoes ADD COLUMN formato_questao TEXT DEFAULT 'Múltipla Escolha'"); conn.commit()
-    except: pass
-    try: c.execute("ALTER TABLE questoes ADD COLUMN eh_real INTEGER DEFAULT 0"); conn.commit()
-    except: pass
-    try: c.execute("ALTER TABLE questoes ADD COLUMN ano_prova INTEGER DEFAULT 0"); conn.commit()
-    except: pass
-    try: c.execute("ALTER TABLE questoes ADD COLUMN hash_questao TEXT DEFAULT ''"); conn.commit()
-    except: pass
-    try: c.execute("ALTER TABLE respostas ADD COLUMN tempo_resposta INTEGER DEFAULT 0"); conn.commit()
-    except: pass
 
 # ================= BANCO DE DADOS =================
 @st.cache_resource
@@ -260,7 +251,6 @@ def iniciar_conexao():
     return conn
 
 conn = iniciar_conexao()
-migrar_banco_de_dados(conn)
 c = conn.cursor()
 
 # ================= INICIALIZAÇÃO DE MEMÓRIA =================
@@ -288,60 +278,38 @@ def obter_perfil_banca(banca_nome):
 
 def gerar_hash_questao(enunciado, gabarito):
     conteudo = f"{enunciado}_{gabarito}".lower().strip()
-    return hashlib.md5(conteudo.encode()).hexdigest()
+    return hashlib.md5(conteudo.encode('utf-8')).hexdigest()
 
 def questao_ja_existe(enunciado, gabarito):
     hash_q = gerar_hash_questao(enunciado, gabarito)
     c.execute("SELECT id FROM questoes WHERE hash_questao = ?", (hash_q,))
     return c.fetchone() is not None
 
-# ================= CORREÇÃO DEFINITIVA: NORMALIZAÇÃO DE GABARITOS (REGEX) =================
 def normalizar_gabarito(gabarito_raw):
-    """
-    Usa Regex para extrair puramente a letra (A, B, C, D, E) ou a palavra CERTO/ERRADO.
-    Limpa completamente sujeiras como "Letra A", "A)", "A - correta", etc.
-    """
     if not gabarito_raw:
         return ""
-
     g = str(gabarito_raw).strip().upper()
-
-    # Tratamento para Certo/Errado (prioritário)
     if "CERTO" in g and "ERRADO" not in g:
         return "CERTO"
     if "ERRADO" in g:
         return "ERRADO"
-
-    # Busca a primeira ocorrência isolada de A, B, C, D ou E no texto
     match = re.search(r'\b([A-E])\b', g.replace(")", " ").replace("-", " "))
     if match:
         return match.group(1)
-
-    # Fallback se a regex falhar (retorna a primeira letra da string caso seja A-E)
     for char in g:
         if char in "ABCDE":
             return char
-
     return g
 
 def extrair_letra_opcao(opcao_texto, tem_alternativas):
-    """
-    Extrai a letra A, B, C, D, E da alternativa renderizada na tela.
-    Exemplo: Recebe 'A) Constituição Federal' e retorna 'A'.
-    """
     texto = str(opcao_texto).strip().upper()
-
     if texto in ("CERTO", "ERRADO"):
         return texto
-
     if tem_alternativas:
-        # Pega sempre a primeira letra que for A, B, C, D ou E na string
         match = re.search(r'([A-E])', texto)
         if match:
             return match.group(1)
-
     return texto
-
 
 # ================= GERAÇÃO DE PROMPTS =================
 def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_selecionado, contexto_jurisprudencia, contexto_estilo):
@@ -449,7 +417,7 @@ def gerar_prompt_questoes_reais(qtd, banca_alvo, cargo_alvo, mat_final, tema_sel
           "gabarito": "Letra isolada ou Certo/Errado",
           "explicacao": "Explicação oficial",
           "comentarios": {{"A": "Por que está certa/errada", "B": "Por que está certa/errada"}},
-          "fonte": "CEBRASPE 2023 - PCDF - Concurso Público",
+          "fonte": "{banca_alvo} - {cargo_alvo} - Concurso Público",
           "dificuldade": {nivel_dif},
           "tags": ["prova_real", "oficial", "{cargo_alvo}"],
           "formato": "{formato_principal}",
@@ -524,7 +492,7 @@ with st.sidebar:
         st.write("---")
         with st.expander("➕ Cadastrar Novo Edital", expanded=True if df_editais.empty else False):
             nome_novo = st.text_input("Nome do Concurso (Ex: PCDF):")
-            banca_nova = st.text_input("Banca Examinadora (Ex: Cebraspe, FCC, Vunesp):")
+            banca_nova = st.text_input("Banca Examinadora (Ex: Consulpam, Cebraspe):")
             cargo_novo = st.text_input("Cargo:")
             texto_colado = st.text_area("Cole o texto do Conteúdo Programático:")
 
@@ -617,7 +585,7 @@ else:
             tipo = st.selectbox("Origem do Material", [
                 "🧠 Inédita IA (Questões Criadas)",
                 "🌐 Questões Reais (Provas Anteriores)",
-                "📂 Revisão (Sortear banco local)"
+                "📂 Revisão (Focada nos Erros do Banco)"
             ])
         with c4:
             qtd = st.slider("Quantidade", 1, 10, 5)
@@ -629,18 +597,25 @@ else:
             instrucao_tema = f"Sorteie um tema complexo em {mat_final}" if tema_selecionado.lower() == "aleatório" else tema_selecionado
 
             if "Revisão" in tipo:
-                st.info("🔄 A resgatar histórico do banco local...")
-                c.execute("""
-                    SELECT id FROM questoes
-                    WHERE (banca LIKE ? OR cargo LIKE ? OR materia LIKE ?)
-                    ORDER BY RANDOM() LIMIT ?
-                """, (f"%{banca_alvo}%", f"%{cargo_alvo}%", f"%{mat_selecionada}%", qtd))
+                st.info("🔄 Resgatando questões (priorizando as que você errou)...")
+                # QUERY OTIMIZADA PARA FOCAR NOS ERROS E DAR VARIEDADE
+                query_revisao = """
+                    SELECT q.id 
+                    FROM questoes q
+                    LEFT JOIN respostas r ON q.id = r.questao_id AND r.usuario = ?
+                    WHERE (q.banca LIKE ? OR q.cargo LIKE ? OR q.materia LIKE ?)
+                    ORDER BY 
+                        CASE WHEN r.acertou = 0 THEN 1 ELSE 2 END,
+                        RANDOM() 
+                    LIMIT ?
+                """
+                c.execute(query_revisao, (st.session_state.usuario_atual, f"%{banca_alvo}%", f"%{cargo_alvo}%", f"%{mat_final}%", qtd))
                 encontradas = [row[0] for row in c.fetchall()]
                 if encontradas:
                     st.session_state.bateria_atual = encontradas
                     st.rerun()
                 else:
-                    st.warning("Banco local insuficiente.")
+                    st.warning("Banco local insuficiente. Gere material Inédito ou Real primeiro!")
 
             elif "Inédita" in tipo:
                 with st.spinner(f"🔍 Analisando padrão da banca {banca_alvo}..."):
@@ -679,7 +654,16 @@ else:
                                     max_tokens=4000
                                 )
 
-                            dados_json = json.loads(resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip())
+                            conteudo = resposta.choices[0].message.content
+                            
+                            # EXTRATOR DE JSON BLINDADO (Remove sujeiras do Llama3)
+                            match = re.search(r'\{.*\}', conteudo, re.DOTALL)
+                            if match:
+                                conteudo_limpo = match.group(0)
+                            else:
+                                conteudo_limpo = conteudo
+                                
+                            dados_json = json.loads(conteudo_limpo.replace("```json", "").replace("```", "").strip())
                             lista_questoes = dados_json.get("questoes", [])
                             if not lista_questoes and isinstance(dados_json, list):
                                 lista_questoes = dados_json
@@ -689,7 +673,6 @@ else:
 
                             for dados in lista_questoes:
                                 enunciado = dados.get("enunciado", "N/A")
-                                # SALVA NO BANCO JÁ NORMALIZADO PELA REGEX
                                 gabarito = normalizar_gabarito(dados.get("gabarito", "N/A"))
 
                                 if questao_ja_existe(enunciado, gabarito):
@@ -758,7 +741,16 @@ else:
                                     max_tokens=4000
                                 )
 
-                            dados_json = json.loads(resposta.choices[0].message.content.replace("```json", "").replace("```", "").strip())
+                            conteudo = resposta.choices[0].message.content
+                            
+                            # EXTRATOR DE JSON BLINDADO
+                            match = re.search(r'\{.*\}', conteudo, re.DOTALL)
+                            if match:
+                                conteudo_limpo = match.group(0)
+                            else:
+                                conteudo_limpo = conteudo
+
+                            dados_json = json.loads(conteudo_limpo.replace("```json", "").replace("```", "").strip())
                             lista_questoes = dados_json.get("questoes", [])
                             if not lista_questoes and isinstance(dados_json, list):
                                 lista_questoes = dados_json
@@ -768,7 +760,6 @@ else:
 
                             for dados in lista_questoes:
                                 enunciado = dados.get("enunciado", "N/A")
-                                # SALVA NO BANCO JÁ NORMALIZADO PELA REGEX
                                 gabarito = normalizar_gabarito(dados.get("gabarito", "N/A"))
 
                                 if questao_ja_existe(enunciado, gabarito):
@@ -831,7 +822,6 @@ else:
                 alts = json.loads(q_alt) if q_alt else {}
                 tags_list = json.loads(q_tags) if q_tags else []
 
-                # NORMALIZAÇÃO BLINDADA DO GABARITO (Lê o que está no banco e força a ficar perfeito)
                 q_gab_normalizado = normalizar_gabarito(q_gab)
 
                 dif_label = ["Muito Fácil", "Fácil", "Médio", "Difícil", "Muito Difícil"][min(q_dif - 1, 4)] if q_dif else "Médio"
@@ -875,16 +865,13 @@ else:
 
                     if q_id in respondidas:
                         status = respondidas[q_id]
-                        # NORMALIZA A RESPOSTA QUE O USUÁRIO SALVOU NO BANCO
                         resposta_usuario_salva = extrair_letra_opcao(status['resposta_usuario'], not is_certo_errado)
 
                         st.markdown("<br><b>Análise Detalhada das Alternativas:</b>", unsafe_allow_html=True)
 
                         for opcao in opcoes[1:]:
-                            # EXTRAI A LETRA EXATA QUE ESTÁ SENDO RENDERIZADA NA TELA AGORA
                             letra_opcao = extrair_letra_opcao(opcao, not is_certo_errado)
 
-                            # COMPARAÇÃO MATEMÁTICA ESTRITA
                             is_resposta_usuario = (letra_opcao == resposta_usuario_salva)
                             is_gabarito = (letra_opcao == q_gab_normalizado)
 
@@ -898,7 +885,6 @@ else:
                             else:
                                 st.markdown(f"<div class='alt-neutra'>{opcao}</div>", unsafe_allow_html=True)
 
-                            # Exibe comentário da alternativa (apenas para múltipla escolha)
                             if not is_certo_errado and letra_opcao in exp_detalhes and exp_detalhes[letra_opcao]:
                                 st.markdown(f"<div class='comentario-alt'>💡 <i><b>Por que?</b> {exp_detalhes[letra_opcao]}</i></div>", unsafe_allow_html=True)
 
@@ -911,10 +897,7 @@ else:
                         resp = st.radio("Sua Resposta:", opcoes, key=f"rad_{q_id}", label_visibility="collapsed")
                         if st.button("Confirmar Resposta", key=f"btn_{q_id}"):
                             if resp != "Selecionar...":
-                                # EXTRAÇÃO PURA DA LETRA MARCADA NO MOMENTO DO CLIQUE
                                 letra_escolhida = extrair_letra_opcao(resp, not is_certo_errado)
-
-                                # CÁLCULO DO ACERTO USANDO APENAS IGUALDADE EXATA
                                 acertou = 1 if letra_escolhida == q_gab_normalizado else 0
 
                                 c.execute("""
