@@ -327,7 +327,7 @@ def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_
         instrucao_formato = f"""
         FORMATO OBRIGATÓRIO: Certo/Errado (Padrão da {banca_alvo})
         - Cada questão deve ter uma assertiva clara
-        - Gabarito: use EXATAMENTE a palavra "Certo" ou "Errado" (sem aspas, sem texto adicional)
+        - Gabarito: use EXATAMENTE a palavra "Certo" ou "Errado"
         - Sem alternativas A, B, C, D, E
         - Estilo: {estilo_enunciado}
         """
@@ -335,17 +335,13 @@ def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_
     elif "A a D" in formato_principal:
         instrucao_formato = f"""
         FORMATO OBRIGATÓRIO: Múltipla Escolha com 4 alternativas DIFERENTES (A, B, C, D)
-        - Banca {banca_alvo} usa exatamente 4 opções
-        - Gabarito: use EXATAMENTE uma letra isolada: "A", "B", "C" ou "D" (sem parênteses, sem texto)
-        - Estilo: {estilo_enunciado}
+        - Gabarito: use EXATAMENTE uma letra isolada: "A", "B", "C" ou "D"
         """
         regras_json_alt = '"alternativas": {"A": "Alternativa única", "B": "Alternativa única diferente", "C": "Alternativa única diferente", "D": "Alternativa única diferente"}'
     else:
         instrucao_formato = f"""
         FORMATO OBRIGATÓRIO: Múltipla Escolha com 5 alternativas TODAS DIFERENTES (A, B, C, D, E)
-        - Banca {banca_alvo} usa exatamente 5 opções
-        - Gabarito: use EXATAMENTE uma letra isolada: "A", "B", "C", "D" ou "E" (sem parênteses, sem texto)
-        - Estilo: {estilo_enunciado}
+        - Gabarito: use EXATAMENTE uma letra isolada: "A", "B", "C", "D" ou "E"
         """
         regras_json_alt = '"alternativas": {"A": "Alternativa 1 única", "B": "Alternativa 2 única diferente", "C": "Alternativa 3 única diferente", "D": "Alternativa 4 única diferente", "E": "Alternativa 5 única diferente"}'
 
@@ -355,6 +351,8 @@ def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_
     PADRÃO DA BANCA {banca_alvo}: {caracteristicas_banca}
     NÍVEL: {descricao_dif} (Nível {nivel_dif}/5)
     JURISPRUDÊNCIA PARA INSPIRAÇÃO: {contexto_jurisprudencia[:2000]}
+    
+    ATENÇÃO: BASEIE-SE EXCLUSIVAMENTE NA LEGISLAÇÃO E JURISPRUDÊNCIA BRASILEIRAS VIGENTES.
     """
 
     prompt = f"""
@@ -364,6 +362,13 @@ def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_
     Matéria: {mat_final} | Tema: {tema_selecionado} | Cargo: {cargo_alvo}
     {instrucao_formato}
 
+    DIRETRIZ CRÍTICA DE EXPLICAÇÃO (ANATOMIA DIDÁTICA DO ERRO):
+    É estritamente proibido fornecer explicações rasas (ex: "Correta, pois garante segurança jurídica"). 
+    Para CADA alternativa nos 'comentarios', você DEVE atuar como um professor de Direito:
+    1. Defina rapidamente o instituto jurídico envolvido.
+    2. Cite a norma brasileira (artigo/lei) ou Súmula/Tema do STF/STJ que fundamenta o acerto ou o erro.
+    3. Explique de forma prática POR QUE a alternativa falhou ou acertou.
+
     JSON EXATO (IMPERATIVO):
     {{
       "questoes": [
@@ -371,13 +376,73 @@ def gerar_prompt_questoes_ineditas(qtd, banca_alvo, cargo_alvo, mat_final, tema_
           "enunciado": "Enunciado ÚNICO e INÉDITO",
           {regras_json_alt},
           "gabarito": "Letra isolada (ex: A) ou Certo/Errado",
-          "explicacao": "Fundamentação legal e jurisprudencial ESPECÍFICA",
-          "comentarios": {{"A": "Por que está certa/errada", "B": "Por que está certa/errada"}},
+          "explicacao": "Fundamentação legal e jurisprudencial ESPECÍFICA geral da questão.",
+          "comentarios": {{
+              "A": "Explicação didática profunda: conceito + artigo de lei/súmula brasileira + motivo do erro/acerto.", 
+              "B": "Explicação didática profunda: conceito + artigo de lei/súmula brasileira + motivo do erro/acerto."
+          }},
           "fonte": "Inédita IA - Estilo {banca_alvo} - Nível {descricao_dif}",
           "dificuldade": {nivel_dif},
           "tags": ["inédita", "jurisprudência", "{cargo_alvo}"],
           "formato": "{formato_principal}",
           "eh_real": 0
+        }}
+      ]
+    }}
+    """
+    return prompt
+
+def gerar_prompt_questoes_reais(qtd, banca_alvo, cargo_alvo, mat_final, tema_selecionado, contexto_reais):
+    perfil_banca = obter_perfil_banca(banca_alvo)
+    perfil_cargo = obter_perfil_cargo(cargo_alvo)
+    nivel_dif = perfil_cargo["nível"]
+    formato_principal = perfil_banca["formatos"][0]
+
+    if "Certo/Errado" in formato_principal:
+        regras_json_alt = '"alternativas": {}'
+        instrucao_gabarito = 'Gabarito: use EXATAMENTE "Certo" ou "Errado"'
+    elif "A a D" in formato_principal:
+        regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "..."}'
+        instrucao_gabarito = 'Gabarito: use EXATAMENTE uma letra isolada: "A", "B", "C" ou "D"'
+    else:
+        regras_json_alt = '"alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."}'
+        instrucao_gabarito = 'Gabarito: use EXATAMENTE uma letra isolada: "A", "B", "C", "D" ou "E"'
+
+    prompt = f"""
+    📋 PROTOCOLO DE TRANSCRIÇÃO DE QUESTÕES REAIS DE PROVAS
+    Você TRANSCREVERÁ questões REAIS de provas anteriores da banca {banca_alvo}.
+    CONTEXTO DAS PROVAS REAIS: {contexto_reais[:4000]}
+    MISSÃO: Transcreva EXATAMENTE {qtd} questões reais de provas anteriores.
+    Banca: {banca_alvo} | Cargo: {cargo_alvo} | Matéria: {mat_final} | Tema: {tema_selecionado}
+    {instrucao_gabarito}
+    
+    ATENÇÃO: BASEIE-SE EXCLUSIVAMENTE NA LEGISLAÇÃO E JURISPRUDÊNCIA BRASILEIRAS VIGENTES.
+    
+    DIRETRIZ CRÍTICA DE EXPLICAÇÃO (ANATOMIA DIDÁTICA DO ERRO):
+    É estritamente proibido fornecer explicações rasas (ex: "A alternativa B é o gabarito oficial"). 
+    Para CADA alternativa nos 'comentarios', ensine o assunto:
+    1. Defina rapidamente o conceito jurídico daquela alternativa.
+    2. Cite a norma brasileira (artigo/lei) ou Súmula do STF/STJ correspondente.
+    3. Explique de forma prática o erro ou acerto jurídico.
+
+    JSON EXATO (IMPERATIVO):
+    {{
+      "questoes": [
+        {{
+          "enunciado": "Enunciado EXATO da prova real",
+          {regras_json_alt},
+          "gabarito": "Letra isolada ou Certo/Errado",
+          "explicacao": "Fundamentação jurídica geral da questão.",
+          "comentarios": {{
+              "A": "Explicação didática profunda: conceito + artigo de lei/súmula brasileira + motivo do erro/acerto.", 
+              "B": "Explicação didática profunda: conceito + artigo de lei/súmula brasileira + motivo do erro/acerto."
+          }},
+          "fonte": "{banca_alvo} - {cargo_alvo} - Concurso Público",
+          "dificuldade": {nivel_dif},
+          "tags": ["prova_real", "oficial", "{cargo_alvo}"],
+          "formato": "{formato_principal}",
+          "eh_real": 1,
+          "ano_prova": 2023
         }}
       ]
     }}
@@ -908,3 +973,4 @@ else:
                                 st.rerun()
                             else:
                                 st.warning("Selecione uma opção.")
+
